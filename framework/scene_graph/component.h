@@ -29,6 +29,7 @@ namespace sg
 class Node;
 
 /// @brief A generic class which can be used by nodes.
+// 实际上是根据gltf的文件结构做了抽象封装
 class Component
 {
   public:

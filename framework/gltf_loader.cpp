@@ -1102,7 +1102,7 @@ sg::Scene GLTFLoader::load_scene(int scene_index, VkBufferUsageFlags additional_
 std::unique_ptr<sg::SubMesh> GLTFLoader::load_model(uint32_t index, bool storage_buffer, VkBufferUsageFlags additional_buffer_usage_flags)
 {
 	PROFILE_SCOPE("Process Model");
-
+	// 创建一个Submesh
 	auto submesh = std::make_unique<sg::SubMesh>();
 
 	std::vector<vkb::core::BufferC> transient_buffers;
@@ -1114,44 +1114,57 @@ std::unique_ptr<sg::SubMesh> GLTFLoader::load_model(uint32_t index, bool storage
 	command_buffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
 	assert(index < model.meshes.size());
+	// 读gltf里第几个mesh，默认0
 	auto &gltf_mesh = model.meshes[index];
 
 	assert(!gltf_mesh.primitives.empty());
+	// 读这个mesh的图元信息，可能有多个attribute，这里取第一个
 	auto &gltf_primitive = gltf_mesh.primitives[0];
-
+	// 自定义的Vertex相关信息
 	std::vector<Vertex>        vertex_data;
+	
 	std::vector<AlignedVertex> aligned_vertex_data;
-
+	// 要读取的数据的指针，会在后面的代码设置好位置，然后根据count读出来
 	const float    *pos     = nullptr;
 	const float    *normals = nullptr;
 	const float    *uvs     = nullptr;
 	const uint16_t *joints  = nullptr;
 	const float    *weights = nullptr;
 	const float    *colors  = nullptr;
+	// 颜色值的分量(几通道)
 	uint32_t        color_component_count{4};
 
 	// Position attribute is required
+	// 读出position数据对应的accessor对象
 	auto  &accessor     = model.accessors[gltf_primitive.attributes.find("POSITION")->second];
+	// 取出这个Accessor有几个Position数据(count)
 	size_t vertex_count = accessor.count;
+	// 根据这个accessor对应的buffer view索引，取出对应的buffer view
 	auto  &buffer_view  = model.bufferViews[accessor.bufferView];
+	// 分几步来讲:
+	// 1. 从所有buffer里，根据buffer view对应的buffer索引，取出这个buffer
+	// 2. .data取出这个buffer里面的具体数据data(char)
+	// 3. buffer_view.byteOffset是数据分段的起始位置, accessor.byteOffset是accessor从哪里开始进行解析，合起来就是数据的偏移量
+	// 4. 这个解析没有根据type做转换，直接转float了！可能是为了方便
+	// 现在，有pos指针，有类型float,有数量vertex_count,就可以解析出所有position数据
 	pos                 = reinterpret_cast<const float *>(&(model.buffers[buffer_view.buffer].data[accessor.byteOffset + buffer_view.byteOffset]));
-
+	// 把此submesh的顶点数量设置好
 	submesh->vertices_count = static_cast<uint32_t>(vertex_count);
-
+	// 若有法线数据，则把normal指针位置设置好，方便后续读取
 	if (gltf_primitive.attributes.find("NORMAL") != gltf_primitive.attributes.end())
 	{
 		accessor    = model.accessors[gltf_primitive.attributes.find("NORMAL")->second];
 		buffer_view = model.bufferViews[accessor.bufferView];
 		normals     = reinterpret_cast<const float *>(&(model.buffers[buffer_view.buffer].data[accessor.byteOffset + buffer_view.byteOffset]));
 	}
-
+	// 以此类推
 	if (gltf_primitive.attributes.find("TEXCOORD_0") != gltf_primitive.attributes.end())
 	{
 		accessor    = model.accessors[gltf_primitive.attributes.find("TEXCOORD_0")->second];
 		buffer_view = model.bufferViews[accessor.bufferView];
 		uvs         = reinterpret_cast<const float *>(&(model.buffers[buffer_view.buffer].data[accessor.byteOffset + buffer_view.byteOffset]));
 	}
-
+	// 以此类推
 	if (gltf_primitive.attributes.find("COLOR_0") != gltf_primitive.attributes.end())
 	{
 		accessor              = model.accessors[gltf_primitive.attributes.find("COLOR_0")->second];
@@ -1202,11 +1215,13 @@ std::unique_ptr<sg::SubMesh> GLTFLoader::load_model(uint32_t index, bool storage
 
 		transient_buffers.push_back(std::move(stage_buffer));
 	}
+	// 这里是真正转为Vertex的地方
 	else
 	{
 		for (size_t v = 0; v < vertex_count; v++)
 		{
 			Vertex vert{};
+			// pos是每三个值一组，所以*3
 			vert.pos    = glm::vec4(glm::make_vec3(&pos[v * 3]), 1.0f);
 			vert.normal = glm::normalize(glm::vec3(normals ? glm::make_vec3(&normals[v * 3]) : glm::vec3(0.0f)));
 			vert.uv     = uvs ? glm::make_vec2(&uvs[v * 2]) : glm::vec3(0.0f);
@@ -1245,9 +1260,10 @@ std::unique_ptr<sg::SubMesh> GLTFLoader::load_model(uint32_t index, bool storage
 
 		transient_buffers.push_back(std::move(stage_buffer));
 	}
-
+	// 若有顶点索引，则获取
 	if (gltf_primitive.indices >= 0)
 	{
+		// 取出索引值的总数
 		submesh->vertex_indices = to_u32(get_attribute_size(&model, gltf_primitive.indices));
 
 		auto format     = get_attribute_format(&model, gltf_primitive.indices);

@@ -42,7 +42,7 @@ struct VertexAttribute
 
 	std::uint32_t offset = 0;
 };
-
+// 模型里的一部分网格，由submesh组合成mesh
 class SubMesh : public Component
 {
   public:
