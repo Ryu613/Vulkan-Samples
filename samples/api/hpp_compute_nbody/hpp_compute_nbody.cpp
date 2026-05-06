@@ -1,4 +1,4 @@
-/* Copyright (c) 2022-2025, NVIDIA CORPORATION. All rights reserved.
+/* Copyright (c) 2022-2026, NVIDIA CORPORATION. All rights reserved.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -67,7 +67,7 @@ bool HPPComputeNBody::resize(const uint32_t width, const uint32_t height)
 	return true;
 }
 
-void HPPComputeNBody::request_gpu_features(vkb::core::HPPPhysicalDevice &gpu)
+void HPPComputeNBody::request_gpu_features(vkb::core::PhysicalDeviceCpp &gpu)
 {
 	// Enable anisotropic filtering if supported
 	if (gpu.get_features().samplerAnisotropy)
@@ -139,12 +139,19 @@ void HPPComputeNBody::render(float delta_time)
 {
 	if (prepared)
 	{
-		draw();
+		vk::Device device = get_device().get_handle();
+
+		// Wait for the previous compute dispatch to finish before updating the UBO
+		auto result = device.waitForFences(compute.fence, VK_TRUE, UINT64_MAX);
+		assert(result == vk::Result::eSuccess);
+		device.resetFences(compute.fence);
+
 		update_compute_uniform_buffers(delta_time);
 		if (camera.updated)
 		{
 			update_graphics_uniform_buffers();
 		}
+		draw();
 	}
 }
 
@@ -360,7 +367,7 @@ void HPPComputeNBody::draw()
 	                                           .pCommandBuffers      = &compute.command_buffer,
 	                                           .signalSemaphoreCount = 1,
 	                                           .pSignalSemaphores    = &compute.semaphore};
-	compute.queue.submit(compute_submit_info);
+	compute.queue.submit(compute_submit_info, compute.fence);
 }
 
 void HPPComputeNBody::initializeCamera()
@@ -384,7 +391,7 @@ void HPPComputeNBody::prepare_compute()
 {
 	vk::Device device = get_device().get_handle();
 
-	compute.queue_family_index = get_device().get_queue_family_index(vk::QueueFlagBits::eCompute);
+	compute.queue_family_index = vkb::common::get_queue_family_index(get_device().get_gpu().get_queue_family_properties(), vk::QueueFlagBits::eCompute);
 
 	vk::PhysicalDeviceLimits const &limits = get_device().get_gpu().get_properties().limits;
 	// Not all implementations support a work group size of 256, so we need to check with the device limits
@@ -462,6 +469,10 @@ void HPPComputeNBody::prepare_compute()
 
 	// Semaphore for compute & graphics sync
 	compute.semaphore = device.createSemaphore({});
+
+	// Fence to ensure compute dispatch has finished reading the UBO before we update it.
+	// Created signaled so the first frame's wait doesn't block forever.
+	compute.fence = device.createFence({.flags = vk::FenceCreateFlagBits::eSignaled});
 
 	// Signal the semaphore
 	vkb::common::submit_and_wait(device, queue, {}, {compute.semaphore});
@@ -576,7 +587,7 @@ void HPPComputeNBody::prepare_graphics()
 {
 	vk::Device device = get_device().get_handle();
 
-	graphics.queue_family_index = get_device().get_queue_family_index(vk::QueueFlagBits::eGraphics);
+	graphics.queue_family_index = vkb::common::get_queue_family_index(get_device().get_gpu().get_queue_family_properties(), vk::QueueFlagBits::eGraphics);
 
 	// Vertex shader uniform buffer block
 	graphics.uniform_buffer =

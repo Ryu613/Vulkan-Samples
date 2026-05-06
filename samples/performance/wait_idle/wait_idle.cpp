@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2025, Arm Limited and Contributors
+/* Copyright (c) 2019-2026, Arm Limited and Contributors
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -50,8 +50,8 @@ bool WaitIdle::prepare(const vkb::ApplicationOptions &options)
 	// Example Scene Render Pipeline
 	vkb::ShaderSource vert_shader("base.vert.spv");
 	vkb::ShaderSource frag_shader("base.frag.spv");
-	auto              scene_subpass   = std::make_unique<vkb::ForwardSubpass>(get_render_context(), std::move(vert_shader), std::move(frag_shader), get_scene(), *camera);
-	auto              render_pipeline = std::make_unique<vkb::RenderPipeline>();
+	auto              scene_subpass   = std::make_unique<vkb::rendering::subpasses::ForwardSubpassC>(get_render_context(), std::move(vert_shader), std::move(frag_shader), get_scene(), *camera);
+	auto              render_pipeline = std::make_unique<vkb::rendering::RenderPipelineC>();
 	render_pipeline->add_subpass(std::move(scene_subpass));
 	set_render_pipeline(std::move(render_pipeline));
 
@@ -67,9 +67,8 @@ void WaitIdle::create_render_context()
 	set_render_context(std::make_unique<CustomRenderContext>(get_device(), get_surface(), *window, wait_idle_enabled));
 }
 
-WaitIdle::CustomRenderContext::CustomRenderContext(vkb::Device &device, VkSurfaceKHR surface, const vkb::Window &window, int &wait_idle_enabled) :
-    RenderContext(device, surface, window),
-    wait_idle_enabled(wait_idle_enabled)
+WaitIdle::CustomRenderContext::CustomRenderContext(vkb::core::DeviceC &device, VkSurfaceKHR surface, const vkb::Window &window, int &wait_idle_enabled) :
+    RenderContext(device, surface, window), wait_idle_enabled(wait_idle_enabled)
 {}
 
 void WaitIdle::CustomRenderContext::wait_frame()

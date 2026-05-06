@@ -1,4 +1,4 @@
-/* Copyright (c) 2023-2025, Holochip Corporation
+/* Copyright (c) 2023-2026, Holochip Corporation
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -220,7 +220,7 @@ void FullScreenExclusive::init_device(const std::vector<const char *> &required_
 		throw std::runtime_error("Required device extensions are missing, will try without.");
 	}
 
-	float queue_priority = 1.0f;
+	float queue_priority = 0.5f;
 
 	VkDeviceQueueCreateInfo queue_info{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};
 	queue_info.queueFamilyIndex = context.graphics_queue_index;
@@ -790,8 +790,6 @@ void FullScreenExclusive::teardown()
 		vkDestroyDebugUtilsMessengerEXT(context.instance, context.debug_callback, nullptr);
 		context.debug_callback = VK_NULL_HANDLE;
 	}
-
-	vk_instance.reset();
 }
 
 FullScreenExclusive::~FullScreenExclusive()
@@ -824,9 +822,7 @@ bool FullScreenExclusive::prepare(const vkb::ApplicationOptions &options)
 
 	init_instance({VK_KHR_SURFACE_EXTENSION_NAME}, {});
 
-	vk_instance = std::make_unique<vkb::Instance>(context.instance);
-
-	context.surface = window->create_surface(*vk_instance);
+	context.surface = window->create_surface(context.instance, nullptr);
 	if (!context.surface)
 		throw std::runtime_error("Failed to create window surface.");
 	auto &extent                        = window->get_extent();

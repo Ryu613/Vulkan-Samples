@@ -1,4 +1,4 @@
-/* Copyright (c) 2023-2025, Holochip Corporation
+/* Copyright (c) 2023-2026, Holochip Corporation
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -24,9 +24,6 @@ MeshShaderCulling::MeshShaderCulling()
 {
 	title = "Mesh shader culling";
 
-	// Configure application version
-	set_api_version(VK_API_VERSION_1_1);
-
 	// Adding device extensions
 	add_device_extension(VK_KHR_SPIRV_1_4_EXTENSION_NAME);
 	add_device_extension(VK_EXT_MESH_SHADER_EXTENSION_NAME);
@@ -50,12 +47,12 @@ MeshShaderCulling::~MeshShaderCulling()
 	}
 }
 
-void MeshShaderCulling::request_gpu_features(vkb::PhysicalDevice &gpu)
+void MeshShaderCulling::request_gpu_features(vkb::core::PhysicalDeviceC &gpu)
 {
 	// Check whether the device supports task and mesh shaders
-	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceMeshShaderFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT, meshShader);
-	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceMeshShaderFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT, meshShaderQueries);
-	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceMeshShaderFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT, taskShader);
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceMeshShaderFeaturesEXT, meshShader);
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceMeshShaderFeaturesEXT, meshShaderQueries);
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceMeshShaderFeaturesEXT, taskShader);
 
 	// Pipeline statistics
 	auto &requested_features = gpu.get_mutable_requested_features();
@@ -374,8 +371,9 @@ void MeshShaderCulling::setup_query_result_buffer()
 	// Results are saved in a host visible buffer for easy access by the application
 	VK_CHECK(vkCreateBuffer(get_device().get_handle(), &buffer_create_info, nullptr, &query_result.buffer));
 	vkGetBufferMemoryRequirements(get_device().get_handle(), query_result.buffer, &memory_requirements);
-	memory_allocation.allocationSize  = memory_requirements.size;
-	memory_allocation.memoryTypeIndex = get_device().get_memory_type(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+	memory_allocation.allocationSize = memory_requirements.size;
+	memory_allocation.memoryTypeIndex =
+	    get_device().get_gpu().get_memory_type(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 	VK_CHECK(vkAllocateMemory(get_device().get_handle(), &memory_allocation, nullptr, &query_result.memory));
 	VK_CHECK(vkBindBufferMemory(get_device().get_handle(), query_result.buffer, query_result.memory, 0));
 

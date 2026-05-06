@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2025, Arm Limited and Contributors
+# Copyright (c) 2019-2026, Arm Limited and Contributors
 # Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
 #
 # SPDX-License-Identifier: Apache-2.0
@@ -371,12 +371,6 @@ set(SPDLOG_FMT_EXTERNAL ON)
 add_subdirectory(spdlog)
 set_property(TARGET spdlog PROPERTY FOLDER "ThirdParty")
 
-# ctpl
-add_library(ctpl INTERFACE)
-set(CTPL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/CTPL)
-target_sources(ctpl INTERFACE ${CTPL_DIR}/ctpl_stl.h)
-target_include_directories(ctpl SYSTEM INTERFACE ${CTPL_DIR})
-
 # OpenCL
 add_library(opencl INTERFACE)
 set(OPENCL_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/opencl)
@@ -391,3 +385,17 @@ if (VKB_PROFILING)
     add_compile_definitions(TRACY_NO_INVARIANT_CHECK=1)
     set_property(TARGET TracyClient PROPERTY FOLDER "ThirdParty")
 endif()
+
+# ai-ml-sdk-vgf-library
+if(NOT IOS)
+    set(FLATBUFFERS_PATH "${CMAKE_SOURCE_DIR}/third_party/flatbuffers")
+    set(ML_SDK_VGF_LIB_BUILD_TOOLS OFF)
+    add_subdirectory(ai-ml-sdk-vgf-library)
+
+    # The DEBUG define set in global_options.cmake clashes with an enum value defined in ai-ml-sdk-vgf-library/include/vgf/logging.hpp,
+    # work around this by disabling the DEBUG define for this target.
+    target_compile_options(vgf PRIVATE -UDEBUG)
+
+    set_target_properties(vgf PROPERTIES FOLDER "ThirdParty" POSITION_INDEPENDENT_CODE ON)
+endif()
+

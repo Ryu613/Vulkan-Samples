@@ -1,4 +1,4 @@
-/* Copyright (c) 2021-2025, Arm Limited and Contributors
+/* Copyright (c) 2021-2026, Arm Limited and Contributors
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -38,12 +38,11 @@ AsyncComputeSample::AsyncComputeSample()
 	config.insert<vkb::BoolSetting>(1, double_buffer_hdr_frames, true);
 }
 
-void AsyncComputeSample::request_gpu_features(vkb::PhysicalDevice &gpu)
+void AsyncComputeSample::request_gpu_features(vkb::core::PhysicalDeviceC &gpu)
 {
 #ifdef VKB_ENABLE_PORTABILITY
 	// Since sampler_info.compareEnable = VK_TRUE, must enable the mutableComparisonSamplers feature of VK_KHR_portability_subset
-	REQUEST_REQUIRED_FEATURE(
-	    gpu, VkPhysicalDevicePortabilitySubsetFeaturesKHR, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PORTABILITY_SUBSET_FEATURES_KHR, mutableComparisonSamplers);
+	REQUEST_OPTIONAL_FEATURE(gpu, VkPhysicalDevicePortabilitySubsetFeaturesKHR, mutableComparisonSamplers);
 #endif
 }
 
@@ -85,7 +84,7 @@ void AsyncComputeSample::prepare_render_targets()
 	color_targets[0].set_debug_name("color_targets[0]");
 	color_targets[1].set_debug_name("color_targets[1]");
 
-	// Should only really need one depth target, but vkb::RenderTarget needs to own the resource.
+	// Should only really need one depth target, but RenderTarget needs to own the resource.
 	vkb::core::Image depth_targets[2]{
 	    {get_device(), size, VK_FORMAT_D32_SFLOAT,
 	     VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
@@ -152,12 +151,12 @@ void AsyncComputeSample::prepare_render_targets()
 		std::vector<vkb::core::Image> color_attachments;
 		color_attachments.push_back(std::move(color_targets[i]));
 		color_attachments.push_back(std::move(depth_targets[i]));
-		forward_render_targets[i] = std::make_unique<vkb::RenderTarget>(std::move(color_attachments));
+		forward_render_targets[i] = std::make_unique<vkb::rendering::RenderTargetC>(std::move(color_attachments));
 	}
 
 	std::vector<vkb::core::Image> shadow_attachments;
 	shadow_attachments.push_back(std::move(shadow_target));
-	shadow_render_target = std::make_unique<vkb::RenderTarget>(std::move(shadow_attachments));
+	shadow_render_target = std::make_unique<vkb::rendering::RenderTargetC>(std::move(shadow_attachments));
 }
 
 void AsyncComputeSample::setup_queues()
@@ -191,10 +190,11 @@ void AsyncComputeSample::setup_queues()
 
 	if (async_enabled)
 	{
-		uint32_t graphics_family_index = get_device().get_queue_family_index(VK_QUEUE_GRAPHICS_BIT);
-		uint32_t compute_family_index  = get_device().get_queue_family_index(VK_QUEUE_COMPUTE_BIT);
+		const auto &queue_family_properties = get_device().get_gpu().get_queue_family_properties();
+		uint32_t    graphics_family_index   = vkb::get_queue_family_index(queue_family_properties, VK_QUEUE_GRAPHICS_BIT);
+		uint32_t    compute_family_index    = vkb::get_queue_family_index(queue_family_properties, VK_QUEUE_COMPUTE_BIT);
 
-		if (get_device().get_num_queues_for_queue_family(graphics_family_index) >= 2)
+		if (queue_family_properties[graphics_family_index].queueCount >= 2)
 		{
 			LOGI("Device has 2 or more graphics queues.");
 			early_graphics_queue = &get_device().get_queue(graphics_family_index, 1);
@@ -286,7 +286,7 @@ bool AsyncComputeSample::prepare(const vkb::ApplicationOptions &options)
 	forward_render_pipeline.set_load_store({{VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE},
 	                                        {VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE}});
 
-	auto blit_render_pipeline = std::make_unique<vkb::RenderPipeline>();
+	auto blit_render_pipeline = std::make_unique<vkb::rendering::RenderPipelineC>();
 	blit_render_pipeline->add_subpass(std::move(composite_scene_subpass));
 	blit_render_pipeline->set_load_store({{VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE},
 	                                      {VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE}});
@@ -304,9 +304,6 @@ bool AsyncComputeSample::prepare(const vkb::ApplicationOptions &options)
 	                          config);
 
 	create_gui(*window, &get_stats());
-
-	// Store the start time to calculate rotation
-	start_time = std::chrono::system_clock::now();
 
 	auto &threshold_module = get_device().get_resource_cache().request_shader_module(VK_SHADER_STAGE_COMPUTE_BIT,
 	                                                                                 vkb::ShaderSource("async_compute/threshold.comp.spv"));
@@ -366,7 +363,7 @@ void AsyncComputeSample::render_shadow_pass()
 	get_render_context().submit(queue, {command_buffer});
 }
 
-vkb::RenderTarget &AsyncComputeSample::get_current_forward_render_target()
+vkb::rendering::RenderTargetC &AsyncComputeSample::get_current_forward_render_target()
 {
 	return *forward_render_targets[forward_render_target_index];
 }
@@ -752,7 +749,8 @@ void AsyncComputeSample::update(float delta_time)
 
 	composite_subpass->set_texture(&get_current_forward_render_target().get_views()[0], blur_chain_views[1].get(), linear_sampler.get());        // blur_chain[1] and color_targets[0] will be used by the present queue
 
-	float rotation_factor = std::chrono::duration<float>(std::chrono::system_clock::now() - start_time).count();
+	elapsed_time += delta_time;
+	float rotation_factor = elapsed_time;
 
 	glm::quat orientation;
 
@@ -825,26 +823,28 @@ std::unique_ptr<vkb::VulkanSampleC> create_async_compute()
 	return std::make_unique<AsyncComputeSample>();
 }
 
-AsyncComputeSample::DepthMapSubpass::DepthMapSubpass(vkb::RenderContext &render_context,
+AsyncComputeSample::DepthMapSubpass::DepthMapSubpass(vkb::rendering::RenderContextC &render_context,
                                                      vkb::ShaderSource &&vertex_shader, vkb::ShaderSource &&fragment_shader,
-                                                     vkb::sg::Scene &scene, vkb::sg::Camera &camera) :
-    vkb::ForwardSubpass(render_context, std::move(vertex_shader), std::move(fragment_shader), scene, camera)
+                                                     vkb::scene_graph::SceneC &scene, vkb::sg::Camera &camera) :
+    vkb::rendering::subpasses::ForwardSubpassC(render_context, std::move(vertex_shader), std::move(fragment_shader), scene, camera)
 {
 	// PCF, so need depth bias to avoid (most) shadow acne.
-	base_rasterization_state.depth_bias_enable = VK_TRUE;
+	auto rasterization_state              = get_rasterization_state();
+	rasterization_state.depth_bias_enable = true;
+	set_rasterization_state(rasterization_state);
 }
 
 void AsyncComputeSample::DepthMapSubpass::draw(vkb::core::CommandBufferC &command_buffer)
 {
 	// Negative bias since we're using inverted Z.
 	command_buffer.set_depth_bias(-1.0f, 0.0f, -2.0f);
-	vkb::ForwardSubpass::draw(command_buffer);
+	vkb::rendering::subpasses::ForwardSubpassC::draw(command_buffer);
 }
 
-AsyncComputeSample::ShadowMapForwardSubpass::ShadowMapForwardSubpass(vkb::RenderContext &render_context,
+AsyncComputeSample::ShadowMapForwardSubpass::ShadowMapForwardSubpass(vkb::rendering::RenderContextC &render_context,
                                                                      vkb::ShaderSource &&vertex_shader, vkb::ShaderSource &&fragment_shader,
-                                                                     vkb::sg::Scene &scene, vkb::sg::Camera &camera, vkb::sg::Camera &shadow_camera_) :
-    vkb::ForwardSubpass(render_context, std::move(vertex_shader), std::move(fragment_shader), scene, camera),
+                                                                     vkb::scene_graph::SceneC &scene, vkb::sg::Camera &camera, vkb::sg::Camera &shadow_camera_) :
+    vkb::rendering::subpasses::ForwardSubpassC(render_context, std::move(vertex_shader), std::move(fragment_shader), scene, camera),
     shadow_camera(shadow_camera_)
 {
 }
@@ -863,7 +863,7 @@ void AsyncComputeSample::ShadowMapForwardSubpass::draw(vkb::core::CommandBufferC
 
 	auto &render_frame = get_render_context().get_active_frame();
 
-	auto allocation = render_frame.allocate_buffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(glm::mat4), thread_index);
+	auto allocation = render_frame.allocate_buffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, sizeof(glm::mat4), get_thread_index());
 
 	allocation.update(shadow_matrix);
 
@@ -871,10 +871,12 @@ void AsyncComputeSample::ShadowMapForwardSubpass::draw(vkb::core::CommandBufferC
 	command_buffer.bind_buffer(allocation.get_buffer(), allocation.get_offset(), allocation.get_size(), 0, 5, 0);
 	command_buffer.bind_image(*shadow_view, *shadow_sampler, 0, 6, 0);
 
-	vkb::ForwardSubpass::draw(command_buffer);
+	vkb::rendering::subpasses::ForwardSubpassC::draw(command_buffer);
 }
 
-AsyncComputeSample::CompositeSubpass::CompositeSubpass(vkb::RenderContext &render_context, vkb::ShaderSource &&vertex_shader, vkb::ShaderSource &&fragment_shader) :
+AsyncComputeSample::CompositeSubpass::CompositeSubpass(vkb::rendering::RenderContextC &render_context,
+                                                       vkb::ShaderSource             &&vertex_shader,
+                                                       vkb::ShaderSource             &&fragment_shader) :
     vkb::rendering::SubpassC(render_context, std::move(vertex_shader), std::move(fragment_shader))
 {
 }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
+/* Copyright (c) 2021-2026, NVIDIA CORPORATION. All rights reserved.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -19,9 +19,7 @@
 
 #include <gltf_loader.h>
 
-#include <core/hpp_device.h>
 #include <scene_graph/components/hpp_sub_mesh.h>
-#include <scene_graph/hpp_scene.h>
 
 namespace vkb
 {
@@ -33,8 +31,8 @@ namespace vkb
 class HPPGLTFLoader : private vkb::GLTFLoader
 {
   public:
-	HPPGLTFLoader(vkb::core::HPPDevice &device) :
-	    GLTFLoader(reinterpret_cast<vkb::Device &>(device))
+	HPPGLTFLoader(vkb::core::DeviceCpp &device) :
+	    GLTFLoader(reinterpret_cast<vkb::core::DeviceC &>(device))
 	{}
 
 	std::unique_ptr<vkb::scene_graph::components::HPPSubMesh> read_model_from_file(
@@ -44,9 +42,9 @@ class HPPGLTFLoader : private vkb::GLTFLoader
 		    vkb::GLTFLoader::read_model_from_file(file_name, index, storage_buffer, static_cast<VkBufferUsageFlags>(additional_buffer_usage_flags)).release()));
 	}
 
-	std::unique_ptr<vkb::scene_graph::HPPScene> read_scene_from_file(const std::string &file_name, int scene_index = -1)
+	std::unique_ptr<vkb::scene_graph::SceneCpp> read_scene_from_file(const std::string &file_name, int scene_index = -1)
 	{
-		return std::unique_ptr<vkb::scene_graph::HPPScene>(reinterpret_cast<vkb::scene_graph::HPPScene *>(vkb::GLTFLoader::read_scene_from_file(file_name, scene_index).release()));
+		return std::unique_ptr<vkb::scene_graph::SceneCpp>(reinterpret_cast<vkb::scene_graph::SceneCpp *>(vkb::GLTFLoader::read_scene_from_file(file_name, scene_index).release()));
 	}
 };
 }        // namespace vkb

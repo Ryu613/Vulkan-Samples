@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2020, Arm Limited and Contributors
+/* Copyright (c) 2019-2026, Arm Limited and Contributors
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -17,9 +17,9 @@
 
 #pragma once
 
-#include <vector>
-
+#include "core/render_pass.h"
 #include "rendering/pipeline_state.h"
+#include <vector>
 
 namespace vkb
 {
@@ -27,6 +27,13 @@ class GraphicsPipeline;
 class PipelineLayout;
 class RenderPass;
 class ShaderModule;
+
+namespace rendering
+{
+template <vkb::BindingType bindingType>
+struct Attachment;
+using AttachmentC = Attachment<vkb::BindingType::C>;
+}        // namespace rendering
 
 enum class ResourceType
 {
@@ -49,18 +56,18 @@ class ResourceRecord
 	const std::ostringstream &get_stream();
 
 	size_t register_shader_module(VkShaderStageFlagBits stage,
-	                              const ShaderSource &  glsl_source,
-	                              const std::string &   entry_point,
-	                              const ShaderVariant & shader_variant);
+	                              const ShaderSource   &glsl_source,
+	                              const std::string    &entry_point,
+	                              const ShaderVariant  &shader_variant);
 
 	size_t register_pipeline_layout(const std::vector<ShaderModule *> &shader_modules);
 
-	size_t register_render_pass(const std::vector<Attachment> &   attachments,
-	                            const std::vector<LoadStoreInfo> &load_store_infos,
-	                            const std::vector<SubpassInfo> &  subpasses);
+	size_t register_render_pass(const std::vector<vkb::rendering::AttachmentC> &attachments,
+	                            const std::vector<LoadStoreInfo>               &load_store_infos,
+	                            const std::vector<SubpassInfo>                 &subpasses);
 
 	size_t register_graphics_pipeline(VkPipelineCache pipeline_cache,
-	                                  PipelineState & pipeline_state);
+	                                  PipelineState  &pipeline_state);
 
 	void set_shader_module(size_t index, const ShaderModule &shader_module);
 

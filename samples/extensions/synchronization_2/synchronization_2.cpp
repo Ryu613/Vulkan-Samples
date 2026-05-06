@@ -1,4 +1,4 @@
-/* Copyright (c) 2021-2025, Sascha Willems
+/* Copyright (c) 2021-2026, Sascha Willems
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -55,6 +55,7 @@ Synchronization2::~Synchronization2()
 		vkDestroyDescriptorSetLayout(get_device().get_handle(), compute.descriptor_set_layout, nullptr);
 		vkDestroyPipeline(get_device().get_handle(), compute.pipeline_calculate, nullptr);
 		vkDestroyPipeline(get_device().get_handle(), compute.pipeline_integrate, nullptr);
+		vkDestroyFence(get_device().get_handle(), compute.fence, nullptr);
 		vkDestroySemaphore(get_device().get_handle(), compute.semaphore, nullptr);
 		vkDestroyCommandPool(get_device().get_handle(), compute.command_pool, nullptr);
 
@@ -63,7 +64,7 @@ Synchronization2::~Synchronization2()
 	}
 }
 
-void Synchronization2::request_gpu_features(vkb::PhysicalDevice &gpu)
+void Synchronization2::request_gpu_features(vkb::core::PhysicalDeviceC &gpu)
 {
 	// Enable anisotropic filtering if supported
 	if (gpu.get_features().samplerAnisotropy)
@@ -72,10 +73,7 @@ void Synchronization2::request_gpu_features(vkb::PhysicalDevice &gpu)
 	}
 
 	// Enable synchronization2 feature
-	REQUEST_REQUIRED_FEATURE(gpu,
-	                         VkPhysicalDeviceSynchronization2FeaturesKHR,
-	                         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR,
-	                         synchronization2);
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceSynchronization2FeaturesKHR, synchronization2);
 }
 
 void Synchronization2::load_assets()
@@ -267,7 +265,7 @@ void Synchronization2::prepare_storage_buffers()
 	// Initial particle positions
 	std::vector<Particle> particle_buffer(num_particles);
 
-	std::default_random_engine      rnd_engine(window->get_window_mode() == vkb::Window::Mode::Headless ? 0 : static_cast<unsigned>(time(nullptr)));
+	std::default_random_engine      rnd_engine((lock_simulation_speed || window->get_window_mode() == vkb::Window::Mode::Headless) ? 0 : static_cast<unsigned>(time(nullptr)));
 	std::normal_distribution<float> rnd_distribution(0.0f, 1.0f);
 
 	for (uint32_t i = 0; i < static_cast<uint32_t>(attractors.size()); i++)
@@ -630,7 +628,7 @@ void Synchronization2::prepare_compute()
 	// Separate command pool as queue family for compute may be different than graphics
 	VkCommandPoolCreateInfo command_pool_create_info = {};
 	command_pool_create_info.sType                   = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	command_pool_create_info.queueFamilyIndex        = get_device().get_queue_family_index(VK_QUEUE_COMPUTE_BIT);
+	command_pool_create_info.queueFamilyIndex        = vkb::get_queue_family_index(get_device().get_gpu().get_queue_family_properties(), VK_QUEUE_COMPUTE_BIT);
 	command_pool_create_info.flags                   = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	VK_CHECK(vkCreateCommandPool(get_device().get_handle(), &command_pool_create_info, nullptr, &compute.command_pool));
 
@@ -646,6 +644,11 @@ void Synchronization2::prepare_compute()
 	// Semaphore for compute & graphics sync
 	VkSemaphoreCreateInfo semaphore_create_info = vkb::initializers::semaphore_create_info();
 	VK_CHECK(vkCreateSemaphore(get_device().get_handle(), &semaphore_create_info, nullptr, &compute.semaphore));
+
+	// Fence to ensure compute dispatch has finished reading the UBO before we update it.
+	// Created signaled so the first frame's wait doesn't block forever.
+	VkFenceCreateInfo fence_create_info = vkb::initializers::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
+	VK_CHECK(vkCreateFence(get_device().get_handle(), &fence_create_info, nullptr, &compute.fence));
 
 	// Signal the semaphore
 	VkSubmitInfo submit_info         = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
@@ -816,7 +819,7 @@ void Synchronization2::draw()
 	compute_submit_info.pWaitSemaphoreInfos      = &computeWaitSemaphore;
 	compute_submit_info.signalSemaphoreInfoCount = 1;
 	compute_submit_info.pSignalSemaphoreInfos    = &computeSignalSemaphore;
-	VK_CHECK(vkQueueSubmit2KHR(compute.queue, 1, &compute_submit_info, VK_NULL_HANDLE));
+	VK_CHECK(vkQueueSubmit2KHR(compute.queue, 1, &compute_submit_info, compute.fence));
 }
 
 bool Synchronization2::prepare(const vkb::ApplicationOptions &options)
@@ -826,8 +829,9 @@ bool Synchronization2::prepare(const vkb::ApplicationOptions &options)
 		return false;
 	}
 
-	graphics.queue_family_index = get_device().get_queue_family_index(VK_QUEUE_GRAPHICS_BIT);
-	compute.queue_family_index  = get_device().get_queue_family_index(VK_QUEUE_COMPUTE_BIT);
+	auto const &queue_family_properties = get_device().get_gpu().get_queue_family_properties();
+	graphics.queue_family_index         = vkb::get_queue_family_index(queue_family_properties, VK_QUEUE_GRAPHICS_BIT);
+	compute.queue_family_index          = vkb::get_queue_family_index(queue_family_properties, VK_QUEUE_COMPUTE_BIT);
 
 	// Not all implementations support a work group size of 256, so we need to check with the device limits
 	work_group_size = std::min(static_cast<uint32_t>(256), get_device().get_gpu().get_properties().limits.maxComputeWorkGroupSize[0]);
@@ -849,12 +853,17 @@ void Synchronization2::render(float delta_time)
 	{
 		return;
 	}
-	draw();
+
+	// Wait for the previous compute dispatch to finish before updating the UBO
+	VK_CHECK(vkWaitForFences(get_device().get_handle(), 1, &compute.fence, VK_TRUE, UINT64_MAX));
+	VK_CHECK(vkResetFences(get_device().get_handle(), 1, &compute.fence));
+
 	update_compute_uniform_buffers(delta_time);
 	if (camera.updated)
 	{
 		update_graphics_uniform_buffers();
 	}
+	draw();
 }
 
 bool Synchronization2::resize(const uint32_t width, const uint32_t height)

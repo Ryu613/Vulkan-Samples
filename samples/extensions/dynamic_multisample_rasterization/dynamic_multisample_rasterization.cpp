@@ -1,4 +1,4 @@
-/* Copyright (c) 2024-2025, Mobica Limited
+/* Copyright (c) 2024-2026, Mobica Limited
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -27,7 +27,6 @@ DynamicMultisampleRasterization::DynamicMultisampleRasterization()
 {
 	title = "DynamicState3 Multisample Rasterization";
 
-	set_api_version(VK_API_VERSION_1_2);
 	add_device_extension(VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME);
 	add_device_extension(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
 }
@@ -51,16 +50,15 @@ DynamicMultisampleRasterization::~DynamicMultisampleRasterization()
 	}
 }
 
-void DynamicMultisampleRasterization::request_gpu_features(vkb::PhysicalDevice &gpu)
+uint32_t DynamicMultisampleRasterization::get_api_version() const
 {
-	REQUEST_REQUIRED_FEATURE(gpu,
-	                         VkPhysicalDeviceExtendedDynamicState3FeaturesEXT,
-	                         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
-	                         extendedDynamicState3RasterizationSamples);
-	REQUEST_REQUIRED_FEATURE(gpu,
-	                         VkPhysicalDeviceDynamicRenderingFeaturesKHR,
-	                         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR,
-	                         dynamicRendering);
+	return VK_API_VERSION_1_2;
+}
+
+void DynamicMultisampleRasterization::request_gpu_features(vkb::core::PhysicalDeviceC &gpu)
+{
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceExtendedDynamicState3FeaturesEXT, extendedDynamicState3RasterizationSamples);
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceDynamicRenderingFeaturesKHR, dynamicRendering);
 }
 
 const std::string to_string(VkSampleCountFlagBits count)
@@ -256,6 +254,16 @@ void DynamicMultisampleRasterization::build_command_buffers()
 		                             VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
 		                             depth_range);
 
+		vkb::image_layout_transition(draw_cmd_buffers[i],
+		                             color_attachment.image,
+		                             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		                             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		                             0,
+		                             VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+		                             VK_IMAGE_LAYOUT_UNDEFINED,
+		                             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		                             range);
+
 		vkCmdBeginRenderingKHR(draw_cmd_buffers[i], &render_info);
 		vkCmdSetRasterizationSamplesEXT(draw_cmd_buffers[i], sample_count);        // VK_EXT_extended_dynamic_state3
 
@@ -369,7 +377,7 @@ void DynamicMultisampleRasterization::load_assets()
 		VkDescriptorImageInfo imageInfo;
 		imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		imageInfo.imageView   = image->get_vk_image_view().get_handle();
-		imageInfo.sampler     = texture->get_sampler()->vk_sampler.get_handle();
+		imageInfo.sampler     = texture->get_sampler()->get_core_sampler().get_handle();
 
 		image_infos.push_back(imageInfo);
 		name_to_texture_id.emplace(name, static_cast<int32_t>(image_infos.size()) - 1);
@@ -489,7 +497,7 @@ void DynamicMultisampleRasterization::setup_color_attachment()
 	VkMemoryAllocateInfo memory_allocation{};
 	memory_allocation.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	memory_allocation.allocationSize  = memReqs.size;
-	memory_allocation.memoryTypeIndex = get_device().get_memory_type(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	memory_allocation.memoryTypeIndex = get_device().get_gpu().get_memory_type(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VK_CHECK(vkAllocateMemory(get_device().get_handle(), &memory_allocation, nullptr, &color_attachment.mem));
 	VK_CHECK(vkBindImageMemory(get_device().get_handle(), color_attachment.image, color_attachment.mem, 0));
 
@@ -531,7 +539,7 @@ void DynamicMultisampleRasterization::setup_depth_stencil()
 	VkMemoryAllocateInfo memory_allocation{};
 	memory_allocation.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	memory_allocation.allocationSize  = memReqs.size;
-	memory_allocation.memoryTypeIndex = get_device().get_memory_type(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	memory_allocation.memoryTypeIndex = get_device().get_gpu().get_memory_type(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VK_CHECK(vkAllocateMemory(get_device().get_handle(), &memory_allocation, nullptr, &depth_stencil.mem));
 	VK_CHECK(vkBindImageMemory(get_device().get_handle(), depth_stencil.image, depth_stencil.mem, 0));
 
@@ -667,8 +675,8 @@ void DynamicMultisampleRasterization::prepare_pipelines()
 
 	pipeline_create_info.pVertexInputState = &vertex_input_state;
 
-	shader_stages[0] = load_shader("dynamic_multisample_rasterization/model.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-	shader_stages[1] = load_shader("dynamic_multisample_rasterization/model.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+	shader_stages[0] = load_shader("dynamic_multisample_rasterization", "model.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+	shader_stages[1] = load_shader("dynamic_multisample_rasterization", "model.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
 	// Add a pipeline for the opaque counterclockwise faces
 	VK_CHECK(vkCreateGraphicsPipelines(get_device().get_handle(), pipeline_cache, 1, &pipeline_create_info, nullptr, &pipeline_opaque));

@@ -1,5 +1,5 @@
-/* Copyright (c) 2018-2025, Arm Limited and Contributors
- * Copyright (c) 2019-2025, Sascha Willems
+/* Copyright (c) 2018-2026, Arm Limited and Contributors
+ * Copyright (c) 2019-2026, Sascha Willems
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -19,6 +19,7 @@
 #define TINYGLTF_IMPLEMENTATION
 #include "gltf_loader.h"
 
+#include <future>
 #include <limits>
 #include <queue>
 
@@ -50,8 +51,6 @@
 #include "scene_graph/node.h"
 #include "scene_graph/scene.h"
 #include "scene_graph/scripts/animation.h"
-
-#include <ctpl_stl.h>
 
 namespace vkb
 {
@@ -403,12 +402,12 @@ static inline bool texture_needs_srgb_colorspace(const std::string &name)
 std::unordered_map<std::string, bool> GLTFLoader::supported_extensions = {
     {KHR_LIGHTS_PUNCTUAL_EXTENSION, false}};
 
-GLTFLoader::GLTFLoader(Device &device) :
+GLTFLoader::GLTFLoader(vkb::core::DeviceC &device) :
     device{device}
 {
 }
 
-std::unique_ptr<sg::Scene> GLTFLoader::read_scene_from_file(const std::string &file_name, int scene_index, VkBufferUsageFlags additional_buffer_usage_flags)
+std::unique_ptr<vkb::scene_graph::SceneC> GLTFLoader::read_scene_from_file(const std::string &file_name, int scene_index, VkBufferUsageFlags additional_buffer_usage_flags)
 {
 	PROFILE_SCOPE("Load GLTF Scene");
 
@@ -448,7 +447,7 @@ std::unique_ptr<sg::Scene> GLTFLoader::read_scene_from_file(const std::string &f
 		model_path.clear();
 	}
 
-	return std::make_unique<sg::Scene>(load_scene(scene_index, additional_buffer_usage_flags));
+	return std::make_unique<vkb::scene_graph::SceneC>(load_scene(scene_index, additional_buffer_usage_flags));
 }
 
 std::unique_ptr<sg::SubMesh> GLTFLoader::read_model_from_file(const std::string &file_name, uint32_t index, bool storage_buffer, VkBufferUsageFlags additional_buffer_usage_flags)
@@ -495,11 +494,11 @@ std::unique_ptr<sg::SubMesh> GLTFLoader::read_model_from_file(const std::string 
 	return std::move(load_model(index, storage_buffer, additional_buffer_usage_flags));
 }
 
-sg::Scene GLTFLoader::load_scene(int scene_index, VkBufferUsageFlags additional_buffer_usage_flags)
+vkb::scene_graph::SceneC GLTFLoader::load_scene(int scene_index, VkBufferUsageFlags additional_buffer_usage_flags)
 {
 	PROFILE_SCOPE("Process Scene");
 
-	auto scene = sg::Scene();
+	auto scene = vkb::scene_graph::SceneC();
 
 	scene.set_name("gltf_scene");
 
@@ -536,7 +535,7 @@ sg::Scene GLTFLoader::load_scene(int scene_index, VkBufferUsageFlags additional_
 	scene.set_components(std::move(light_components));
 
 	// Load samplers
-	std::vector<std::unique_ptr<sg::Sampler>>
+	std::vector<std::unique_ptr<vkb::scene_graph::components::SamplerC>>
 	    sampler_components(model.samplers.size());
 
 	for (size_t sampler_index = 0; sampler_index < model.samplers.size(); sampler_index++)
@@ -551,25 +550,19 @@ sg::Scene GLTFLoader::load_scene(int scene_index, VkBufferUsageFlags additional_
 	timer.start();
 
 	// Load images
-	auto thread_count = std::thread::hardware_concurrency();
-	thread_count      = thread_count == 0 ? 1 : thread_count;
-	ctpl::thread_pool thread_pool(thread_count);
-
 	auto image_count = to_u32(model.images.size());
 
 	std::vector<std::future<std::unique_ptr<sg::Image>>> image_component_futures;
 	for (size_t image_index = 0; image_index < image_count; image_index++)
 	{
-		auto fut = thread_pool.push(
-		    [this, image_index](size_t) {
+		image_component_futures.push_back(std::async(
+		    [this, image_index]() {
 			    auto image = parse_image(model.images[image_index]);
 
 			    LOGI("Loaded gltf image #{} ({})", image_index, model.images[image_index].uri.c_str());
 
 			    return image;
-		    });
-
-		image_component_futures.push_back(std::move(fut));
+		    }));
 	}
 
 	std::vector<std::unique_ptr<sg::Image>> image_components;
@@ -582,7 +575,7 @@ sg::Scene GLTFLoader::load_scene(int scene_index, VkBufferUsageFlags additional_
 	{
 		std::vector<vkb::core::BufferC> transient_buffers;
 
-		auto command_buffer = device.request_command_buffer();
+		auto command_buffer = device.get_command_pool().request_command_buffer();
 
 		command_buffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT, 0);
 
@@ -611,7 +604,7 @@ sg::Scene GLTFLoader::load_scene(int scene_index, VkBufferUsageFlags additional_
 
 		auto &queue = device.get_queue_by_flags(VK_QUEUE_GRAPHICS_BIT, 0);
 
-		queue.submit(*command_buffer, device.request_fence());
+		queue.submit(*command_buffer, device.get_fence_pool().request_fence());
 
 		device.get_fence_pool().wait();
 		device.get_fence_pool().reset();
@@ -626,11 +619,13 @@ sg::Scene GLTFLoader::load_scene(int scene_index, VkBufferUsageFlags additional_
 
 	auto elapsed_time = timer.stop();
 
+	auto thread_count = std::thread::hardware_concurrency();
+	thread_count      = thread_count == 0 ? 1 : thread_count;
 	LOGI("Time spent loading images: {} seconds across {} threads.", vkb::to_string(elapsed_time), thread_count);
 
 	// Load textures
 	auto images                  = scene.get_components<sg::Image>();
-	auto samplers                = scene.get_components<sg::Sampler>();
+	auto samplers                = scene.get_components<vkb::scene_graph::components::SamplerC>();
 	auto default_sampler_linear  = create_default_sampler(TINYGLTF_TEXTURE_FILTER_LINEAR);
 	auto default_sampler_nearest = create_default_sampler(TINYGLTF_TEXTURE_FILTER_NEAREST);
 	bool used_nearest_sampler    = false;
@@ -849,7 +844,7 @@ sg::Scene GLTFLoader::load_scene(int scene_index, VkBufferUsageFlags additional_
 	// Load nodes
 	auto meshes = scene.get_components<sg::Mesh>();
 
-	std::vector<std::unique_ptr<sg::Node>> nodes;
+	std::vector<std::unique_ptr<vkb::scene_graph::NodeC>> nodes;
 
 	for (size_t node_index = 0; node_index < model.nodes.size(); ++node_index)
 	{
@@ -1021,7 +1016,7 @@ sg::Scene GLTFLoader::load_scene(int scene_index, VkBufferUsageFlags additional_
 	scene.set_components(std::move(animations));
 
 	// Load scenes
-	std::queue<std::pair<sg::Node &, int>> traverse_nodes;
+	std::queue<std::pair<vkb::scene_graph::NodeC &, int>> traverse_nodes;
 
 	tinygltf::Scene *gltf_scene{nullptr};
 
@@ -1043,7 +1038,7 @@ sg::Scene GLTFLoader::load_scene(int scene_index, VkBufferUsageFlags additional_
 		throw std::runtime_error("Couldn't determine which scene to load!");
 	}
 
-	auto root_node = std::make_unique<sg::Node>(0, gltf_scene->name);
+	auto root_node = std::make_unique<vkb::scene_graph::NodeC>(0, gltf_scene->name);
 
 	for (auto node_index : gltf_scene->nodes)
 	{
@@ -1080,7 +1075,7 @@ sg::Scene GLTFLoader::load_scene(int scene_index, VkBufferUsageFlags additional_
 	scene.set_nodes(std::move(nodes));
 
 	// Create node for the default camera
-	auto camera_node = std::make_unique<sg::Node>(-1, "default_camera");
+	auto camera_node = std::make_unique<vkb::scene_graph::NodeC>(-1, "default_camera");
 
 	auto default_camera = create_default_camera();
 	default_camera->set_node(*camera_node);
@@ -1109,7 +1104,7 @@ std::unique_ptr<sg::SubMesh> GLTFLoader::load_model(uint32_t index, bool storage
 
 	auto &queue = device.get_queue_by_flags(VK_QUEUE_GRAPHICS_BIT, 0);
 
-	auto command_buffer = device.request_command_buffer();
+	auto command_buffer = device.get_command_pool().request_command_buffer();
 
 	command_buffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
@@ -1332,7 +1327,7 @@ std::unique_ptr<sg::SubMesh> GLTFLoader::load_model(uint32_t index, bool storage
 
 	command_buffer->end();
 
-	queue.submit(*command_buffer, device.request_fence());
+	queue.submit(*command_buffer, device.get_fence_pool().request_fence());
 
 	device.get_fence_pool().wait();
 	device.get_fence_pool().reset();
@@ -1341,9 +1336,9 @@ std::unique_ptr<sg::SubMesh> GLTFLoader::load_model(uint32_t index, bool storage
 	return std::move(submesh);
 }
 
-std::unique_ptr<sg::Node> GLTFLoader::parse_node(const tinygltf::Node &gltf_node, size_t index) const
+std::unique_ptr<vkb::scene_graph::NodeC> GLTFLoader::parse_node(const tinygltf::Node &gltf_node, size_t index) const
 {
-	auto node = std::make_unique<sg::Node>(index, gltf_node.name);
+	auto node = std::make_unique<vkb::scene_graph::NodeC>(index, gltf_node.name);
 
 	auto &transform = node->get_component<sg::Transform>();
 
@@ -1507,7 +1502,6 @@ std::unique_ptr<sg::Image> GLTFLoader::parse_image(tinygltf::Image &gltf_image) 
 	{
 		if (!device.is_image_format_supported(image->get_format()))
 		{
-			LOGW("ASTC not supported: decoding {}", image->get_name());
 			image = std::make_unique<sg::Astc>(*image);
 			image->generate_mipmaps();
 		}
@@ -1518,7 +1512,7 @@ std::unique_ptr<sg::Image> GLTFLoader::parse_image(tinygltf::Image &gltf_image) 
 	return image;
 }
 
-std::unique_ptr<sg::Sampler> GLTFLoader::parse_sampler(const tinygltf::Sampler &gltf_sampler) const
+std::unique_ptr<vkb::scene_graph::components::SamplerC> GLTFLoader::parse_sampler(const tinygltf::Sampler &gltf_sampler) const
 {
 	auto name = gltf_sampler.name;
 
@@ -1543,7 +1537,7 @@ std::unique_ptr<sg::Sampler> GLTFLoader::parse_sampler(const tinygltf::Sampler &
 	core::Sampler vk_sampler{device, sampler_info};
 	vk_sampler.set_debug_name(gltf_sampler.name);
 
-	return std::make_unique<sg::Sampler>(name, std::move(vk_sampler));
+	return std::make_unique<vkb::scene_graph::components::SamplerC>(name, std::move(vk_sampler));
 }
 
 std::unique_ptr<sg::Texture> GLTFLoader::parse_texture(const tinygltf::Texture &gltf_texture) const
@@ -1557,7 +1551,7 @@ std::unique_ptr<sg::PBRMaterial> GLTFLoader::create_default_material()
 	return parse_material(gltf_material);
 }
 
-std::unique_ptr<sg::Sampler> GLTFLoader::create_default_sampler(int filter)
+std::unique_ptr<vkb::scene_graph::components::SamplerC> GLTFLoader::create_default_sampler(int filter)
 {
 	tinygltf::Sampler gltf_sampler;
 

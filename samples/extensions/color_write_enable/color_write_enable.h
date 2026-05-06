@@ -1,4 +1,5 @@
-/* Copyright (c) 2023, Mobica Limited
+/* Copyright (c) 2023-2026, Mobica Limited
+ * Copyright (c) 2026, Arm Limited and Contributors
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -37,10 +38,13 @@ class ColorWriteEnable : public ApiVulkanSample
 	void render(float delta_time) override;
 	bool prepare(const vkb::ApplicationOptions &options) override;
 	void on_update_ui_overlay(vkb::Drawer &drawer) override;
-	void request_gpu_features(vkb::PhysicalDevice &gpu) override;
+	void request_gpu_features(vkb::core::PhysicalDeviceC &gpu) override;
 	void setup_render_pass() override;
 	void setup_framebuffer() override;
-	void prepare_gui() override;
+
+  private:
+	// from ApiVulkanSample
+	uint32_t get_gui_subpass() const override;
 
   private:
 	struct FrameBufferAttachment

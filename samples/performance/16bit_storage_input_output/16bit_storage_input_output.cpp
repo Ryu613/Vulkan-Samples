@@ -1,4 +1,4 @@
-/* Copyright (c) 2020-2025, Arm Limited and Contributors
+/* Copyright (c) 2020-2026, Arm Limited and Contributors
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -25,9 +25,6 @@
 
 KHR16BitStorageInputOutputSample::KHR16BitStorageInputOutputSample()
 {
-	// For enabling 16-bit storage device extensions.
-	add_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, true);
-
 	// Will be used in vertex and fragment shaders to declare varying data as FP16 rather than FP32.
 	// This significantly reduces bandwidth as varyings are stored in main memory on TBDR architectures.
 	// On Vulkan 1.1, this extension is in core, but just enable the extension in case we are running on a Vulkan 1.0 implementation.
@@ -119,7 +116,7 @@ void KHR16BitStorageInputOutputSample::setup_scene()
 				continue;
 			}
 
-			auto node = std::make_unique<vkb::sg::Node>(-1, "Teapot");
+			auto node = std::make_unique<vkb::scene_graph::NodeC>(-1, "Teapot");
 			node->set_component(*teapot_mesh);
 			teapot_mesh->add_node(*node);
 
@@ -159,9 +156,9 @@ void KHR16BitStorageInputOutputSample::update_pipeline()
 
 	vkb::ShaderSource vert_shader(base_path + vertex_path);
 	vkb::ShaderSource frag_shader(base_path + fragment_path);
-	auto              scene_subpass = std::make_unique<vkb::ForwardSubpass>(get_render_context(), std::move(vert_shader), std::move(frag_shader), get_scene(), *camera);
+	auto              scene_subpass = std::make_unique<vkb::rendering::subpasses::ForwardSubpassC>(get_render_context(), std::move(vert_shader), std::move(frag_shader), get_scene(), *camera);
 
-	auto render_pipeline = std::make_unique<vkb::RenderPipeline>();
+	auto render_pipeline = std::make_unique<vkb::rendering::RenderPipelineC>();
 	render_pipeline->add_subpass(std::move(scene_subpass));
 
 	set_render_pipeline(std::move(render_pipeline));
@@ -192,9 +189,9 @@ bool KHR16BitStorageInputOutputSample::prepare(const vkb::ApplicationOptions &op
 	return true;
 }
 
-void KHR16BitStorageInputOutputSample::request_gpu_features(vkb::PhysicalDevice &gpu)
+void KHR16BitStorageInputOutputSample::request_gpu_features(vkb::core::PhysicalDeviceC &gpu)
 {
-	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDevice16BitStorageFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_16BIT_STORAGE_FEATURES, storageInputOutput16);
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDevice16BitStorageFeatures, storageInputOutput16);
 }
 
 void KHR16BitStorageInputOutputSample::update(float delta_time)

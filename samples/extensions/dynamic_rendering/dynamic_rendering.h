@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2021-2024, Holochip Corporation
+ * Copyright (c) 2021-2026, Holochip Corporation
+ * Copyright (c) 2026, Arm Limited and Contributors
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -32,7 +33,13 @@ class DynamicRendering : public ApiVulkanSample
 	void build_command_buffers() override;
 	void view_changed() override;
 	void on_update_ui_overlay(vkb::Drawer &drawer) override;
-	void request_gpu_features(vkb::PhysicalDevice &gpu) override;
+	void request_gpu_features(vkb::core::PhysicalDeviceC &gpu) override;
+	void setup_render_pass() override;
+	void setup_framebuffer() override;
+
+  private:
+	// from vkb::VulkanSample
+	uint32_t get_api_version() const override;
 
   private:
 	void load_assets();
@@ -42,7 +49,6 @@ class DynamicRendering : public ApiVulkanSample
 	void create_descriptor_sets();
 	void create_descriptor_pool();
 	void create_pipeline();
-	void create_render_pass_non_dynamic();
 	void draw();
 
 	struct

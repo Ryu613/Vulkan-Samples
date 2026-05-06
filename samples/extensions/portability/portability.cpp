@@ -1,4 +1,4 @@
-/* Copyright (c) 2022-2025, Holochip
+/* Copyright (c) 2022-2026, Holochip
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -33,10 +33,6 @@ Portability::Portability() :
     filter_pass()
 {
 	title = "Portability";
-	// Portability is a Vulkan 1.3 extension
-	set_api_version(VK_API_VERSION_1_3);
-	add_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
-	add_instance_extension(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME, /*optional*/ true);
 }
 
 Portability::~Portability()
@@ -76,13 +72,25 @@ Portability::~Portability()
 	}
 }
 
-void Portability::request_gpu_features(vkb::PhysicalDevice &gpu)
+uint32_t Portability::get_api_version() const
+{
+	// Portability is a Vulkan 1.3 extension
+	return VK_API_VERSION_1_3;
+}
+
+void Portability::request_gpu_features(vkb::core::PhysicalDeviceC &gpu)
 {
 	// Enable anisotropic filtering if supported
 	if (gpu.get_features().samplerAnisotropy)
 	{
 		gpu.get_mutable_requested_features().samplerAnisotropy = VK_TRUE;
 	}
+}
+
+void Portability::request_instance_extensions(std::unordered_map<std::string, vkb::RequestMode> &requested_extensions) const
+{
+	ApiVulkanSample::request_instance_extensions(requested_extensions);
+	requested_extensions[VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME] = vkb::RequestMode::Optional;
 }
 
 void Portability::build_command_buffers()
@@ -277,7 +285,7 @@ void Portability::create_attachment(VkFormat format, VkImageUsageFlagBits usage,
 	VK_CHECK(vkCreateImage(get_device().get_handle(), &image, nullptr, &attachment->image));
 	vkGetImageMemoryRequirements(get_device().get_handle(), attachment->image, &memory_requirements);
 	memory_allocate_info.allocationSize  = memory_requirements.size;
-	memory_allocate_info.memoryTypeIndex = get_device().get_memory_type(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	memory_allocate_info.memoryTypeIndex = get_device().get_gpu().get_memory_type(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VK_CHECK(vkAllocateMemory(get_device().get_handle(), &memory_allocate_info, nullptr, &attachment->mem));
 	VK_CHECK(vkBindImageMemory(get_device().get_handle(), attachment->image, attachment->mem, 0));
 
@@ -868,41 +876,48 @@ void Portability::render(float delta_time)
 void Portability::on_update_ui_overlay(vkb::Drawer &drawer)
 {
 #ifdef VKB_ENABLE_PORTABILITY
-	std::string portability_support_list;
-	if (portability_features.constantAlphaColorBlendFactors)
-		portability_support_list += "constantAlphaColorBlendFactors\n";
-	if (portability_features.events)
-		portability_support_list += "events\n";
-	if (portability_features.imageView2DOn3DImage)
-		portability_support_list += "imageView2DOn3dImage\n";
-	if (portability_features.imageViewFormatReinterpretation)
-		portability_support_list += "imageViewFormatReinterpretation\n";
-	if (portability_features.imageViewFormatSwizzle)
-		portability_support_list += "imageViewFormatSwizzle\n";
-	if (portability_features.multisampleArrayImage)
-		portability_support_list += "multisampleArrayImage\n";
-	if (portability_features.mutableComparisonSamplers)
-		portability_support_list += "mutableComparisonSamplers\n";
-	if (portability_features.pointPolygons)
-		portability_support_list += "pointPolygons\n";
-	if (portability_features.samplerMipLodBias)
-		portability_support_list += "samplerMipLodBias\n";
-	if (portability_features.separateStencilMaskRef)
-		portability_support_list += "separateStencilMaskRef\n";
-	if (portability_features.shaderSampleRateInterpolationFunctions)
-		portability_support_list += "shaderSampleRateInterpolationFunctions\n";
-	if (portability_features.tessellationIsolines)
-		portability_support_list += "tessellationIsolines\n";
-	if (portability_features.tessellationPointMode)
-		portability_support_list += "tessellationPointMode\n";
-	if (portability_features.triangleFans)
-		portability_support_list += "triangleFans\n";
-	if (portability_features.vertexAttributeAccessBeyondStride)
-		portability_support_list += "vertexAttributeAccessBeyondStride\n";
-	drawer.text("Device Portability feature support list:\n%s", portability_support_list.c_str());
-#else
-	drawer.text("VKB_ENABLE_PORTABILITY not enabled can't list portability feature set");
+	// VK_KHR_portability_subset extension must be available in the implementation to list device portability feature set
+	if (get_device().get_gpu().is_extension_supported(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME))
+	{
+		std::string portability_support_list;
+		if (portability_features.constantAlphaColorBlendFactors)
+			portability_support_list += "constantAlphaColorBlendFactors\n";
+		if (portability_features.events)
+			portability_support_list += "events\n";
+		if (portability_features.imageView2DOn3DImage)
+			portability_support_list += "imageView2DOn3dImage\n";
+		if (portability_features.imageViewFormatReinterpretation)
+			portability_support_list += "imageViewFormatReinterpretation\n";
+		if (portability_features.imageViewFormatSwizzle)
+			portability_support_list += "imageViewFormatSwizzle\n";
+		if (portability_features.multisampleArrayImage)
+			portability_support_list += "multisampleArrayImage\n";
+		if (portability_features.mutableComparisonSamplers)
+			portability_support_list += "mutableComparisonSamplers\n";
+		if (portability_features.pointPolygons)
+			portability_support_list += "pointPolygons\n";
+		if (portability_features.samplerMipLodBias)
+			portability_support_list += "samplerMipLodBias\n";
+		if (portability_features.separateStencilMaskRef)
+			portability_support_list += "separateStencilMaskRef\n";
+		if (portability_features.shaderSampleRateInterpolationFunctions)
+			portability_support_list += "shaderSampleRateInterpolationFunctions\n";
+		if (portability_features.tessellationIsolines)
+			portability_support_list += "tessellationIsolines\n";
+		if (portability_features.tessellationPointMode)
+			portability_support_list += "tessellationPointMode\n";
+		if (portability_features.triangleFans)
+			portability_support_list += "triangleFans\n";
+		if (portability_features.vertexAttributeAccessBeyondStride)
+			portability_support_list += "vertexAttributeAccessBeyondStride\n";
+		drawer.text("Device Portability feature support list:\n%s", portability_support_list.c_str());
+	}
+	else
 #endif
+	{
+		drawer.text("VK_KHR_portability_subset not available can't list portability feature set");
+	}
+
 	if (drawer.header("Settings"))
 	{
 		if (drawer.checkbox("Bloom", &bloom))

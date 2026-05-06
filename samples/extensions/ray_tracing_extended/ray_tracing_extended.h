@@ -1,4 +1,4 @@
-/* Copyright (c) 2021-2025 Holochip Corporation
+/* Copyright (c) 2021-2026 Holochip Corporation
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -29,8 +29,9 @@
 class RaytracingExtended : public ApiVulkanSample
 {
   public:
-	VkPhysicalDeviceRayTracingPipelinePropertiesKHR  ray_tracing_pipeline_properties{};
-	VkPhysicalDeviceAccelerationStructureFeaturesKHR acceleration_structure_features{};
+	VkPhysicalDeviceRayTracingPipelinePropertiesKHR    ray_tracing_pipeline_properties{};
+	VkPhysicalDeviceAccelerationStructureFeaturesKHR   acceleration_structure_features{};
+	VkPhysicalDeviceAccelerationStructurePropertiesKHR acceleration_structure_properties{};
 
 	enum RenderMode : uint32_t
 	{
@@ -195,11 +196,11 @@ class RaytracingExtended : public ApiVulkanSample
 	{
 		RaytracingScene()  = default;
 		~RaytracingScene() = default;
-		RaytracingScene(vkb::Device &device, const std::vector<SceneLoadInfo> &scenesToLoad);
-		std::vector<std::unique_ptr<vkb::sg::Scene>> scenes;
-		std::vector<VkDescriptorImageInfo>           imageInfos;
-		std::vector<Model>                           models;
-		std::vector<ModelBuffer>                     model_buffers;
+		RaytracingScene(vkb::core::DeviceC &device, const std::vector<SceneLoadInfo> &scenesToLoad);
+		std::vector<std::unique_ptr<vkb::scene_graph::SceneC>> scenes;
+		std::vector<VkDescriptorImageInfo>                     imageInfos;
+		std::vector<Model>                                     models;
+		std::vector<ModelBuffer>                               model_buffers;
 	};
 
 	std::unique_ptr<RaytracingScene> raytracing_scene;
@@ -260,7 +261,7 @@ class RaytracingExtended : public ApiVulkanSample
 	RaytracingExtended();
 	~RaytracingExtended() override;
 
-	void                 request_gpu_features(vkb::PhysicalDevice &gpu) override;
+	void                 request_gpu_features(vkb::core::PhysicalDeviceC &gpu) override;
 	uint64_t             get_buffer_device_address(VkBuffer buffer);
 	void                 create_storage_image();
 	void                 create_static_object_buffers();

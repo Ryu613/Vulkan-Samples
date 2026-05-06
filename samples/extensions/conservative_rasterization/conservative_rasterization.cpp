@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2025, Sascha Willems
+/* Copyright (c) 2019-2026, Sascha Willems
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -31,9 +31,6 @@
 ConservativeRasterization::ConservativeRasterization()
 {
 	title = "Conservative rasterization";
-
-	// Reading device properties of conservative rasterization requires VK_KHR_get_physical_device_properties2 to be enabled
-	add_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 
 	// Enable extension required for conservative rasterization
 	add_device_extension(VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME);
@@ -71,7 +68,7 @@ ConservativeRasterization::~ConservativeRasterization()
 	triangle.indices.reset();
 }
 
-void ConservativeRasterization::request_gpu_features(vkb::PhysicalDevice &gpu)
+void ConservativeRasterization::request_gpu_features(vkb::core::PhysicalDeviceC &gpu)
 {
 	gpu.get_mutable_requested_features().fillModeNonSolid = gpu.get_features().fillModeNonSolid;
 	gpu.get_mutable_requested_features().wideLines        = gpu.get_features().wideLines;
@@ -106,7 +103,7 @@ void ConservativeRasterization::prepare_offscreen()
 	VK_CHECK(vkCreateImage(get_device().get_handle(), &image, nullptr, &offscreen_pass.color.image));
 	vkGetImageMemoryRequirements(get_device().get_handle(), offscreen_pass.color.image, &memory_requirements);
 	memory_allocation_info.allocationSize  = memory_requirements.size;
-	memory_allocation_info.memoryTypeIndex = get_device().get_memory_type(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	memory_allocation_info.memoryTypeIndex = get_device().get_gpu().get_memory_type(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VK_CHECK(vkAllocateMemory(get_device().get_handle(), &memory_allocation_info, nullptr, &offscreen_pass.color.mem));
 	VK_CHECK(vkBindImageMemory(get_device().get_handle(), offscreen_pass.color.image, offscreen_pass.color.mem, 0));
 
@@ -144,7 +141,7 @@ void ConservativeRasterization::prepare_offscreen()
 	VK_CHECK(vkCreateImage(get_device().get_handle(), &image, nullptr, &offscreen_pass.depth.image));
 	vkGetImageMemoryRequirements(get_device().get_handle(), offscreen_pass.depth.image, &memory_requirements);
 	memory_allocation_info.allocationSize  = memory_requirements.size;
-	memory_allocation_info.memoryTypeIndex = get_device().get_memory_type(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	memory_allocation_info.memoryTypeIndex = get_device().get_gpu().get_memory_type(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VK_CHECK(vkAllocateMemory(get_device().get_handle(), &memory_allocation_info, nullptr, &offscreen_pass.depth.mem));
 	VK_CHECK(vkBindImageMemory(get_device().get_handle(), offscreen_pass.depth.image, offscreen_pass.depth.mem, 0));
 

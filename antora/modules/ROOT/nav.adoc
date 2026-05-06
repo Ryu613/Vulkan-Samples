@@ -1,6 +1,7 @@
 ////
-- Copyright (c) 2023-2025, Holochip Inc
-- Copyright (c) 2023-2025, Sascha Willems
+- Copyright (c) 2023-2026, Holochip Inc
+- Copyright (c) 2023-2026, Sascha Willems
+- Copyright (c) 2025-2026, Arm Limited and Contributors
 -
 - SPDX-License-Identifier: Apache-2.0
 -
@@ -62,6 +63,7 @@
 ** xref:samples/extensions/dynamic_rendering/README.adoc[Dynamic rendering]
 ** xref:samples/extensions/dynamic_rendering_local_read/README.adoc[Dynamic rendering local read]
 ** xref:samples/extensions/extended_dynamic_state2/README.adoc[Extended dynamic state2]
+** xref:samples/extensions/fragment_density_map/README.adoc[Fragment density map]
 ** xref:samples/extensions/fragment_shader_barycentric/README.adoc[Fragment shader barycentric]
 ** xref:samples/extensions/fragment_shading_rate/README.adoc[Fragment shading rate]
 ** xref:samples/extensions/fragment_shading_rate_dynamic/README.adoc[Fragment shading rate dynamic]
@@ -80,8 +82,10 @@
 ** xref:samples/extensions/portability/README.adoc[Portability]
 ** xref:samples/extensions/push_descriptors/README.adoc[Push descriptors]
 *** xref:samples/extensions/hpp_push_descriptors/README.adoc[Push descriptors (Vulkan-Hpp)]
+** xref:samples/extensions/rasterization_order_attachment_access/README.adoc[Rasterization order attachment access]
 ** xref:samples/extensions/ray_tracing_basic/README.adoc[Raytracing basic]
 ** xref:samples/extensions/ray_tracing_extended/README.adoc[Raytracing extended]
+** xref:samples/extensions/ray_tracing_invocation_reorder/README.adoc[Ray tracing invocation reorder (SER)]
 ** xref:samples/extensions/ray_queries/README.adoc[Ray queries]
 ** xref:samples/extensions/ray_tracing_reflection/README.adoc[Ray tracing reflection]
 ** xref:samples/extensions/ray_tracing_position_fetch/README.adoc[Ray tracing position fetch]
@@ -89,6 +93,12 @@
 ** xref:samples/extensions/shader_debugprintf/README.adoc[Shader Debug Printf]
 ** xref:samples/extensions/sparse_image/README.adoc[Sparse Image]
 ** xref:samples/extensions/synchronization_2/README.adoc[Synchronization 2]
+** xref:samples/extensions/tensor_and_data_graph/README.adoc[Tensor and Data Graph]
+*** xref:samples/extensions/tensor_and_data_graph/simple_tensor_and_data_graph/README.adoc[Simple Tensor and Data Graph]
+*** xref:samples/extensions/tensor_and_data_graph/graph_constants/README.adoc[Graph constants]
+*** xref:samples/extensions/tensor_and_data_graph/compute_shaders_with_tensors/README.adoc[Compute shaders with tensors]
+*** xref:samples/extensions/tensor_and_data_graph/tensor_image_aliasing/README.adoc[Tensor image aliasing]
+*** xref:samples/extensions/tensor_and_data_graph/postprocessing_with_vgf/README.adoc[Postprocessing with VGF]
 ** xref:samples/extensions/timeline_semaphore/README.adoc[Timeline semaphore]
 ** xref:samples/extensions/vertex_dynamic_state/README.adoc[Vertex dynamic state]
 ** xref:samples/extensions/dynamic_multisample_rasterization/README.adoc[Dynamic multisample rasterization]
@@ -127,3 +137,4 @@
 ** xref:docs/build.adoc[Build guide]
 ** xref:docs/memory_limits.adoc[Memory limits]
 ** xref:docs/misc.adoc[Miscellaneous]
+* link:https://github.com/KhronosGroup/Vulkan-Samples[GitHub Repository, window=_blank]

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2022-2026, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,8 +61,9 @@ class RaytracingReflection : public ApiVulkanSample
 	};
 
   public:
-	VkPhysicalDeviceRayTracingPipelinePropertiesKHR  ray_tracing_pipeline_properties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR};
-	VkPhysicalDeviceAccelerationStructureFeaturesKHR acceleration_structure_features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR};
+	VkPhysicalDeviceRayTracingPipelinePropertiesKHR    ray_tracing_pipeline_properties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR};
+	VkPhysicalDeviceAccelerationStructureFeaturesKHR   acceleration_structure_features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR};
+	VkPhysicalDeviceAccelerationStructurePropertiesKHR acceleration_structure_properties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR};
 
 	std::vector<AccelerationStructure> bottom_level_acceleration_structure;
 	AccelerationStructure              top_level_acceleration_structure;
@@ -127,9 +128,13 @@ class RaytracingReflection : public ApiVulkanSample
 	void draw();
 
 	void build_command_buffers() override;
-	void request_gpu_features(vkb::PhysicalDevice &gpu) override;
+	void request_gpu_features(vkb::core::PhysicalDeviceC &gpu) override;
 	bool prepare(const vkb::ApplicationOptions &options) override;
 	void render(float delta_time) override;
+
+  private:
+	// from vkb::VulkanSample
+	uint32_t get_api_version() const override;
 };
 
 std::unique_ptr<vkb::VulkanSampleC> create_ray_tracing_reflection();

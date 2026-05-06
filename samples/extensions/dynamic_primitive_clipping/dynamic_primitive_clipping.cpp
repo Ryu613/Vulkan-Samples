@@ -1,4 +1,4 @@
-/* Copyright (c) 2024-2025, Mobica Limited
+/* Copyright (c) 2024-2026, Mobica Limited
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -24,10 +24,8 @@
 DynamicPrimitiveClipping::DynamicPrimitiveClipping()
 {
 	title = "Dynamic primitive clipping";
-	set_api_version(VK_API_VERSION_1_1);
 
 	// Extensions required by vkCmdSetDepthClipEnableEXT().
-	add_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 	add_device_extension(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
 	add_device_extension(VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME);
 }
@@ -75,7 +73,7 @@ bool DynamicPrimitiveClipping::prepare(const vkb::ApplicationOptions &options)
 	return true;
 }
 
-void DynamicPrimitiveClipping::request_gpu_features(vkb::PhysicalDevice &gpu)
+void DynamicPrimitiveClipping::request_gpu_features(vkb::core::PhysicalDeviceC &gpu)
 {
 	// shaderClipDistance feature is required in order to gl_ClipDistance builtin shader variable to work.
 	if (gpu.get_features().shaderClipDistance)
@@ -88,14 +86,8 @@ void DynamicPrimitiveClipping::request_gpu_features(vkb::PhysicalDevice &gpu)
 	}
 
 	// Features required by vkCmdSetDepthClipEnableEXT().
-	REQUEST_REQUIRED_FEATURE(gpu,
-	                         VkPhysicalDeviceDepthClipEnableFeaturesEXT,
-	                         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_ENABLE_FEATURES_EXT,
-	                         depthClipEnable);
-	REQUEST_REQUIRED_FEATURE(gpu,
-	                         VkPhysicalDeviceExtendedDynamicState3FeaturesEXT,
-	                         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
-	                         extendedDynamicState3DepthClipEnable);
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceDepthClipEnableFeaturesEXT, depthClipEnable);
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceExtendedDynamicState3FeaturesEXT, extendedDynamicState3DepthClipEnable);
 }
 
 void DynamicPrimitiveClipping::build_command_buffers()

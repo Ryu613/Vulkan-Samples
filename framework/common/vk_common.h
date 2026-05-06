@@ -1,6 +1,6 @@
-/* Copyright (c) 2018-2025, Arm Limited and Contributors
- * Copyright (c) 2019-2025, Sascha Willems
- * Copyright (c) 2024-2025, Mobica Limited
+/* Copyright (c) 2018-2026, Arm Limited and Contributors
+ * Copyright (c) 2019-2026, Sascha Willems
+ * Copyright (c) 2024-2026, Mobica Limited
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -53,6 +53,12 @@ enum class CommandBufferResetMode
 	ResetPool,
 	ResetIndividually,
 	AlwaysAllocate,
+};
+
+enum class RequestMode
+{
+	Optional,
+	Required
 };
 
 /**
@@ -144,6 +150,14 @@ enum class ShadingLanguage
  * @return The shader module containing the loaded shader
  */
 VkShaderModule load_shader(const std::string &filename, VkDevice device, VkShaderStageFlagBits stage);
+
+/**
+ * @brief Helper function to create a VkShaderModule from a SPIR-V vector
+ * @param spirv The SPIR-V code in vector format
+ * @param device The logical device
+ * @return The shader module containing the loaded shader
+ */
+VkShaderModule load_shader_from_vector(const std::vector<uint32_t> &spirv, VkDevice device);
 
 /**
  * @brief Helper function to select a VkSurfaceFormatKHR
@@ -305,5 +319,7 @@ std::vector<LoadStoreInfo> get_clear_store_all();
  */
 std::vector<VkClearValue> get_clear_value();
 }        // namespace gbuffer
+
+uint32_t get_queue_family_index(std::vector<VkQueueFamilyProperties> const &queue_family_properties, VkQueueFlagBits queue_flag);
 
 }        // namespace vkb

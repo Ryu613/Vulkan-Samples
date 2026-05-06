@@ -1,4 +1,5 @@
-/* Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
+/* Copyright (c) 2025-2026, Arm Limited and Contributors
+ * Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -22,82 +23,21 @@
 
 namespace vkb
 {
-namespace detail
-{
-// Mapping from VkType to vk::Type
-template <typename VkType>
-struct HPPType
-{
-};
-
-template <>
-struct HPPType<VkBuffer>
-{
-	using Type = vk::Buffer;
-};
-
-template <>
-struct HPPType<VkBufferCreateInfo>
-{
-	using Type = vk::BufferCreateInfo;
-};
-
-template <>
-struct HPPType<VkCommandBuffer>
-{
-	using Type = vk::CommandBuffer;
-};
-
-template <>
-struct HPPType<VkDevice>
-{
-	using Type = vk::Device;
-};
-
-template <>
-struct HPPType<VkImage>
-{
-	using Type = vk::Image;
-};
-
-template <>
-struct HPPType<VkImageCreateInfo>
-{
-	using Type = vk::ImageCreateInfo;
-};
-
-template <>
-struct HPPType<VkImageView>
-{
-	using Type = vk::ImageView;
-};
-
-template <>
-struct HPPType<VkRenderPass>
-{
-	using Type = vk::RenderPass;
-};
-
-template <>
-struct HPPType<VkSampler>
-{
-	using Type = vk::Sampler;
-};
-}        // namespace detail
-
 template <vkb::BindingType bindingType, typename T>
 struct VulkanTypeMapping
 {
 };
+
 template <typename T>
 struct VulkanTypeMapping<vkb::BindingType::Cpp, T>
 {
 	using Type = T;
 };
+
 template <typename T>
 struct VulkanTypeMapping<vkb::BindingType::C, T>
 {
-	using Type = typename detail::HPPType<T>::Type;
+	using Type = typename vk::CppType<T>::Type;
 };
 
 }        // namespace vkb

@@ -1,5 +1,5 @@
-/* Copyright (c) 2021-2025, NVIDIA CORPORATION. All rights reserved.
- * Copyright (c) 2024-2025, Arm Limited and Contributors
+/* Copyright (c) 2021-2026, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2024-2026, Arm Limited and Contributors
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -18,6 +18,7 @@
 
 #include "hpp_api_vulkan_sample.h"
 #include "core/hpp_queue.h"
+#include "gui.h"
 
 // Instantiate the default dispatcher
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
@@ -30,6 +31,9 @@ bool HPPApiVulkanSample::prepare(const vkb::ApplicationOptions &options)
 	}
 
 	depth_format = vkb::common::get_suitable_depth_format(get_device().get_gpu().get_handle());
+
+	// Update extent from surface extent to reflect command line arguments
+	extent = get_render_context().get_surface_extent();
 
 	// Create synchronization objects
 	// Create a semaphore used to synchronize image presentation
@@ -48,7 +52,7 @@ bool HPPApiVulkanSample::prepare(const vkb::ApplicationOptions &options)
 	submit_info.setWaitSemaphores(semaphores.acquired_image_ready);
 	submit_info.setSignalSemaphores(semaphores.render_complete);
 
-	queue = get_device().get_suitable_graphics_queue().get_handle();
+	queue = get_device().get_queue_by_flags(vk::QueueFlagBits::eGraphics, 0).get_handle();
 
 	create_swapchain_buffers();
 	create_command_pool();
@@ -59,8 +63,6 @@ bool HPPApiVulkanSample::prepare(const vkb::ApplicationOptions &options)
 	create_pipeline_cache();
 	setup_framebuffer();
 
-	extent = get_render_context().get_surface_extent();
-
 	prepare_gui();
 
 	return true;
@@ -69,10 +71,21 @@ bool HPPApiVulkanSample::prepare(const vkb::ApplicationOptions &options)
 void HPPApiVulkanSample::prepare_gui()
 {
 	create_gui(*window, nullptr, 15.0f, true);
-	get_gui().prepare(pipeline_cache,
-	                  render_pass,
-	                  {load_shader("uioverlay/uioverlay.vert.spv", vk::ShaderStageFlagBits::eVertex),
-	                   load_shader("uioverlay/uioverlay.frag.spv", vk::ShaderStageFlagBits::eFragment)});
+
+	std::vector<vk::PipelineShaderStageCreateInfo> shader_stages = {
+	    load_shader("uioverlay/uioverlay.vert.spv", vk::ShaderStageFlagBits::eVertex),
+	    load_shader("uioverlay/uioverlay.frag.spv", vk::ShaderStageFlagBits::eFragment)};
+
+	if (uses_dynamic_rendering())
+	{
+		vk::Format color_format = get_render_context().get_swapchain().get_format();
+		vk::Format depth_fmt    = depth_format;
+		get_gui().prepare(pipeline_cache, color_format, depth_fmt, shader_stages);
+	}
+	else
+	{
+		get_gui().prepare(pipeline_cache, render_pass, shader_stages, get_gui_subpass());
+	}
 }
 
 void HPPApiVulkanSample::update(float delta_time)
@@ -456,6 +469,17 @@ void HPPApiVulkanSample::draw_ui(const vk::CommandBuffer command_buffer)
 	}
 }
 
+void HPPApiVulkanSample::draw_ui(const vk::CommandBuffer command_buffer, uint32_t swapchain_image_index)
+{
+	if (has_gui())
+	{
+		command_buffer.setViewport(0, vk::Viewport{0.0f, 0.0f, static_cast<float>(extent.width), static_cast<float>(extent.height), 0.0f, 1.0f});
+		command_buffer.setScissor(0, vk::Rect2D{{0, 0}, extent});
+
+		get_gui().draw(command_buffer, swapchain_buffers[swapchain_image_index].view, extent.width, extent.height);
+	}
+}
+
 void HPPApiVulkanSample::prepare_frame()
 {
 	if (get_render_context().has_swapchain())
@@ -495,7 +519,7 @@ void HPPApiVulkanSample::submit_frame()
 		}
 
 		vk::DisplayPresentInfoKHR disp_present_info;
-		if (get_device().is_extension_supported(VK_KHR_DISPLAY_SWAPCHAIN_EXTENSION_NAME) &&
+		if (get_device().get_gpu().is_extension_supported(VK_KHR_DISPLAY_SWAPCHAIN_EXTENSION_NAME) &&
 		    window->get_display_present_info(reinterpret_cast<VkDisplayPresentInfoKHR *>(&disp_present_info), extent.width, extent.height))
 		{
 			// Add display present info if supported and wanted
@@ -541,7 +565,10 @@ HPPApiVulkanSample::~HPPApiVulkanSample()
 		// Clean up Vulkan resources
 		device.destroyDescriptorPool(descriptor_pool);
 		destroy_command_buffers();
-		device.destroyRenderPass(render_pass);
+		if (!uses_dynamic_rendering())
+		{
+			device.destroyRenderPass(render_pass);
+		}
 		for (auto &framebuffer : framebuffers)
 		{
 			device.destroyFramebuffer(framebuffer);
@@ -851,7 +878,8 @@ void HPPApiVulkanSample::handle_surface_changes()
 	vk::SurfaceCapabilitiesKHR surface_properties =
 	    get_device().get_gpu().get_handle().getSurfaceCapabilitiesKHR(get_render_context().get_swapchain().get_surface());
 
-	if (surface_properties.currentExtent != get_render_context().get_surface_extent())
+	if (surface_properties.currentExtent != get_render_context().get_surface_extent() &&
+	    surface_properties.currentExtent != vk::Extent2D{0xFFFFFFFF, 0xFFFFFFFF})
 	{
 		resize(surface_properties.currentExtent.width, surface_properties.currentExtent.height);
 	}
@@ -1082,7 +1110,7 @@ void HPPApiVulkanSample::draw_model(std::unique_ptr<vkb::scene_graph::components
 
 	command_buffer.bindVertexBuffers(0, vertex_buffer.get_handle(), offset);
 	command_buffer.bindIndexBuffer(index_buffer.get_handle(), 0, model->get_index_type());
-	command_buffer.drawIndexed(model->vertex_indices, instance_count, 0, 0, 0);
+	command_buffer.drawIndexed(model->get_vertex_indices(), instance_count, 0, 0, 0);
 }
 
 void HPPApiVulkanSample::with_command_buffer(const std::function<void(vk::CommandBuffer command_buffer)> &f, vk::Semaphore signalSemaphore)

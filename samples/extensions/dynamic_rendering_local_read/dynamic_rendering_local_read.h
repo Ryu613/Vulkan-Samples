@@ -1,4 +1,5 @@
-/* Copyright (c) 2024, Sascha Willems
+/* Copyright (c) 2024-2026, Sascha Willems
+ * Copyright (c) 2026, Arm Limited and Contributors
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -32,14 +33,21 @@ class DynamicRenderingLocalRead : public ApiVulkanSample
 	void build_command_buffers() override;
 	void render(float delta_time) override;
 	bool prepare(const vkb::ApplicationOptions &options) override;
-	void request_gpu_features(vkb::PhysicalDevice &gpu) override;
+	void request_gpu_features(vkb::core::PhysicalDeviceC &gpu) override;
 	void on_update_ui_overlay(vkb::Drawer &drawer) override;
+
+  private:
+	// from vkb::VulkanSample
+	uint32_t get_api_version() const override;
+
+	// from ApiVulkanSample
+	uint32_t get_gui_subpass() const override;
 
   private:
 	struct Scenes
 	{
-		std::unique_ptr<vkb::sg::Scene> opaque;
-		std::unique_ptr<vkb::sg::Scene> transparent;
+		std::unique_ptr<vkb::scene_graph::SceneC> opaque;
+		std::unique_ptr<vkb::scene_graph::SceneC> transparent;
 	} scenes;
 
 	struct
@@ -98,9 +106,14 @@ class DynamicRenderingLocalRead : public ApiVulkanSample
 	int32_t attachment_width{0};
 	int32_t attachment_height{0};
 
+	std::array<uint32_t, 4>             color_attachment_input_indices{VK_ATTACHMENT_UNUSED, 0, 1, 2};
+	VkRenderingInputAttachmentIndexInfo rendering_attachment_index_info{VK_STRUCTURE_TYPE_RENDERING_INPUT_ATTACHMENT_INDEX_INFO_KHR,
+	                                                                    nullptr,
+	                                                                    static_cast<uint32_t>(color_attachment_input_indices.size()),
+	                                                                    color_attachment_input_indices.data()};
+
 	void setup_framebuffer() override;
 	void setup_render_pass() override;
-	void prepare_gui() override;
 
 	void load_assets();
 	void create_attachment(VkFormat format, VkImageUsageFlags usage, FrameBufferAttachment &attachment);
@@ -111,7 +124,7 @@ class DynamicRenderingLocalRead : public ApiVulkanSample
 	void update_uniform_buffer();
 	void prepare_layouts_and_descriptors();
 
-	void draw_scene(std::unique_ptr<vkb::sg::Scene> &scene, VkCommandBuffer cmd, VkPipelineLayout pipeline_layout);
+	void draw_scene(std::unique_ptr<vkb::scene_graph::SceneC> &scene, VkCommandBuffer cmd, VkPipelineLayout pipeline_layout);
 };
 
 std::unique_ptr<vkb::VulkanSample<vkb::BindingType::C>> create_dynamic_rendering_local_read();

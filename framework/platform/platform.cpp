@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2025, Arm Limited and Contributors
+/* Copyright (c) 2019-2026, Arm Limited and Contributors
  * Copyright (c) 2025, NVIDIA CORPORATION. All rights reserved.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -122,7 +122,7 @@ ExitCode Platform::initialize(const std::vector<Plugin *> &plugins_)
 			return ExitCode::Help;
 		}
 		auto optionIt = option_map.find(argumentDeque[0].substr(2));
-		if (commandIt == command_map.end())
+		if (optionIt == option_map.end())
 		{
 			LOGE("Option \"{}\" is unknown!", argumentDeque[0]);
 			return ExitCode::Help;
@@ -280,7 +280,7 @@ void Platform::update()
 		{
 			if (app->has_render_context())
 			{
-				on_post_draw(reinterpret_cast<vkb::RenderContext &>(app->get_render_context()));
+				on_post_draw(reinterpret_cast<vkb::rendering::RenderContextC &>(app->get_render_context()));
 			}
 		}
 		else if (auto *app = dynamic_cast<VulkanSampleC *>(active_app.get()))
@@ -477,7 +477,7 @@ bool Platform::start_app()
 	auto sample_info = static_cast<const apps::SampleInfo *>(requested_app_info);
 	active_app->set_name(sample_info->name);
 
-	if (!active_app->prepare({false, window.get()}))
+	if (!active_app->prepare({fixed_simulation_fps, window.get()}))
 	{
 		LOGE("Failed to prepare vulkan app.");
 		return false;
@@ -531,7 +531,7 @@ void Platform::resize(uint32_t width, uint32_t height)
 		}                               \
 	}
 
-void Platform::on_post_draw(RenderContext &context)
+void Platform::on_post_draw(vkb::rendering::RenderContextC &context)
 {
 	HOOK(Hook::PostDraw, on_post_draw(context));
 }

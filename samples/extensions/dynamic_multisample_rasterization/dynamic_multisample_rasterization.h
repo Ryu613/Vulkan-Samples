@@ -1,4 +1,4 @@
-/* Copyright (c) 2024, Mobica Limited
+/* Copyright (c) 2024-2026, Mobica Limited
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -29,14 +29,14 @@ class DynamicMultisampleRasterization : public ApiVulkanSample
 	std::unique_ptr<vkb::core::BufferC> vertex_buffer = nullptr;
 	std::unique_ptr<vkb::core::BufferC> index_buffer  = nullptr;
 
-	std::unique_ptr<vkb::sg::Scene>    scene;
-	std::vector<VkDescriptorImageInfo> image_infos;
-	std::map<std::string, int32_t>     name_to_texture_id;
+	std::unique_ptr<vkb::scene_graph::SceneC> scene;
+	std::vector<VkDescriptorImageInfo>        image_infos;
+	std::map<std::string, int32_t>            name_to_texture_id;
 
 	struct SceneNode
 	{
-		vkb::sg::Node    *node;
-		vkb::sg::SubMesh *sub_mesh;
+		vkb::scene_graph::NodeC *node;
+		vkb::sg::SubMesh        *sub_mesh;
 	};
 	std::vector<SceneNode> scene_nodes_opaque;
 	std::vector<SceneNode> scene_nodes_opaque_flipped;
@@ -102,7 +102,7 @@ class DynamicMultisampleRasterization : public ApiVulkanSample
 
   public:
 	virtual void build_command_buffers() override;
-	virtual void request_gpu_features(vkb::PhysicalDevice &gpu) override;
+	virtual void request_gpu_features(vkb::core::PhysicalDeviceC &gpu) override;
 	virtual bool prepare(const vkb::ApplicationOptions &options) override;
 	virtual void render(float delta_time) override;
 	virtual void on_update_ui_overlay(vkb::Drawer &drawer) override;
@@ -125,6 +125,10 @@ class DynamicMultisampleRasterization : public ApiVulkanSample
 	void         draw_node(VkCommandBuffer &, SceneNode &);
 	void         destroy_image_data(ImageData &image_data);
 	void         attachments_setup(std::vector<VkRenderingAttachmentInfoKHR> &attachments, std::vector<VkClearValue> &clear_values);
+
+  private:
+	// from vkb::VulkanSample
+	uint32_t get_api_version() const override;
 };
 
 std::unique_ptr<vkb::VulkanSample<vkb::BindingType::C>> create_dynamic_multisample_rasterization();

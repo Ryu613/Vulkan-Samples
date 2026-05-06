@@ -1,5 +1,5 @@
-/* Copyright (c) 2019-2025, Arm Limited and Contributors
- * Copyright (c) 2024-2025, NVIDIA CORPORATION. All rights reserved.
+/* Copyright (c) 2019-2026, Arm Limited and Contributors
+ * Copyright (c) 2024-2026, NVIDIA CORPORATION. All rights reserved.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -19,14 +19,17 @@
 #pragma once
 
 #include "common/hpp_vk_common.h"
+#include "core/device.h"
 #include "core/hpp_descriptor_set_layout.h"
-#include "core/hpp_device.h"
-#include "core/hpp_physical_device.h"
+#include "core/hpp_framebuffer.h"
+#include "core/hpp_render_pass.h"
+#include "core/hpp_sampler.h"
+#include "core/image.h"
 #include "core/physical_device.h"
 #include "hpp_resource_binding_state.h"
 #include "rendering/hpp_pipeline_state.h"
-#include "rendering/hpp_render_target.h"
 #include "rendering/subpass.h"
+#include "resource_cache.h"
 
 namespace vkb
 {
@@ -35,20 +38,7 @@ class QueryPool;
 namespace core
 {
 class HPPQueryPool;
-}        // namespace core
 
-namespace rendering
-{
-template <vkb::BindingType bindingType>
-class Subpass;
-using SubpassCpp = Subpass<vkb::BindingType::Cpp>;
-
-template <vkb::BindingType bindingType>
-struct LightingState;
-}        // namespace rendering
-
-namespace core
-{
 /**
  * @brief Helper class to manage and record a command buffer, building and
  *        keeping track of pipeline state and resource bindings
@@ -103,9 +93,8 @@ class CommandBuffer
 	using QueryPoolType      = typename std::conditional<bindingType == vkb::BindingType::Cpp, vkb::core::HPPQueryPool, vkb::QueryPool>::type;
 	using RasterizationStateType =
 	    typename std::conditional<bindingType == vkb::BindingType::Cpp, vkb::rendering::HPPRasterizationState, vkb::RasterizationState>::type;
-	using RenderPassType   = typename std::conditional<bindingType == vkb::BindingType::Cpp, vkb::core::HPPRenderPass, vkb::RenderPass>::type;
-	using RenderTargetType = typename std::conditional<bindingType == vkb::BindingType::Cpp, vkb::rendering::HPPRenderTarget, vkb::RenderTarget>::type;
-	using SamplerType      = typename std::conditional<bindingType == vkb::BindingType::Cpp, vkb::core::HPPSampler, vkb::core::Sampler>::type;
+	using RenderPassType = typename std::conditional<bindingType == vkb::BindingType::Cpp, vkb::core::HPPRenderPass, vkb::RenderPass>::type;
+	using SamplerType    = typename std::conditional<bindingType == vkb::BindingType::Cpp, vkb::core::HPPSampler, vkb::core::Sampler>::type;
 	using VertexInputStateType =
 	    typename std::conditional<bindingType == vkb::BindingType::Cpp, vkb::rendering::HPPVertexInputState, vkb::VertexInputState>::type;
 	using ViewportStateType = typename std::conditional<bindingType == vkb::BindingType::Cpp, vkb::rendering::HPPViewportState, vkb::ViewportState>::type;
@@ -139,16 +128,16 @@ class CommandBuffer
 	void begin(CommandBufferUsageFlagsType flags, const RenderPassType *render_pass, const FramebufferType *framebuffer, uint32_t subpass_index);
 
 	void                   begin_query(QueryPoolType const &query_pool, uint32_t query, QueryControlFlagsType flags);
-	void                   begin_render_pass(RenderTargetType const                                                   &render_target,
+	void                   begin_render_pass(vkb::rendering::RenderTarget<bindingType> const                          &render_target,
 	                                         std::vector<LoadStoreInfoType> const                                     &load_store_infos,
 	                                         std::vector<ClearValueType> const                                        &clear_values,
 	                                         std::vector<std::unique_ptr<vkb::rendering::Subpass<bindingType>>> const &subpasses,
 	                                         SubpassContentsType                                                       contents = VK_SUBPASS_CONTENTS_INLINE);
-	void                   begin_render_pass(RenderTargetType const            &render_target,
-	                                         RenderPassType const              &render_pass,
-	                                         FramebufferType const             &framebuffer,
-	                                         std::vector<ClearValueType> const &clear_values,
-	                                         SubpassContentsType                contents = vk::SubpassContents::eInline);
+	void                   begin_render_pass(vkb::rendering::RenderTarget<bindingType> const &render_target,
+	                                         RenderPassType const                            &render_pass,
+	                                         FramebufferType const                           &framebuffer,
+	                                         std::vector<ClearValueType> const               &clear_values,
+	                                         SubpassContentsType                              contents = vk::SubpassContents::eInline);
 	void                   bind_buffer(vkb::core::Buffer<bindingType> const &buffer, DeviceSizeType offset, DeviceSizeType range, uint32_t set, uint32_t binding, uint32_t array_element);
 	void                   bind_image(ImageViewType const &image_view, SamplerType const &sampler, uint32_t set, uint32_t binding, uint32_t array_element);
 	void                   bind_image(ImageViewType const &image_view, uint32_t set, uint32_t binding, uint32_t array_element);
@@ -180,11 +169,11 @@ class CommandBuffer
 	void                   execute_commands(vkb::core::CommandBuffer<bindingType> &secondary_command_buffer);
 	void                   execute_commands(std::vector<std::shared_ptr<vkb::core::CommandBuffer<bindingType>>> &secondary_command_buffers);
 	CommandBufferLevelType get_level() const;
-	RenderPassType        &get_render_pass(RenderTargetType const                                                   &render_target,
+	RenderPassType        &get_render_pass(vkb::rendering::RenderTarget<bindingType> const                          &render_target,
 	                                       std::vector<LoadStoreInfoType> const                                     &load_store_infos,
 	                                       std::vector<std::unique_ptr<vkb::rendering::Subpass<bindingType>>> const &subpasses);
 	void                   image_memory_barrier(ImageViewType const &image_view, ImageMemoryBarrierType const &memory_barrier) const;
-	void                   image_memory_barrier(RenderTargetType &render_target, uint32_t view_index, ImageMemoryBarrierType const &memory_barrier) const;
+	void                   image_memory_barrier(vkb::rendering::RenderTarget<bindingType> &render_target, uint32_t view_index, ImageMemoryBarrierType const &memory_barrier) const;
 	void                   next_subpass();
 
 	/**
@@ -247,7 +236,7 @@ class CommandBuffer
 	                                     vkb::core::HPPRenderPass const  *render_pass,
 	                                     vkb::core::HPPFramebuffer const *framebuffer,
 	                                     uint32_t                         subpass_index);
-	void                      begin_render_pass_impl(vkb::rendering::HPPRenderTarget const &render_target,
+	void                      begin_render_pass_impl(vkb::rendering::RenderTargetCpp const &render_target,
 	                                                 vkb::core::HPPRenderPass const        &render_pass,
 	                                                 vkb::core::HPPFramebuffer const       &framebuffer,
 	                                                 std::vector<vk::ClearValue> const     &clear_values,
@@ -261,11 +250,11 @@ class CommandBuffer
 	                                                     vkb::common::HPPBufferMemoryBarrier const &memory_barrier);
 	void                      copy_buffer_impl(vkb::core::BufferCpp const &src_buffer, vkb::core::BufferCpp const &dst_buffer, vk::DeviceSize size);
 	void                      execute_commands_impl(std::vector<std::shared_ptr<vkb::core::CommandBuffer<vkb::BindingType::Cpp>>> &secondary_command_buffers);
-	void                      flush_impl(vkb::core::HPPDevice &device, vk::PipelineBindPoint pipeline_bind_point);
+	void                      flush_impl(vkb::core::DeviceCpp &device, vk::PipelineBindPoint pipeline_bind_point);
 	void                      flush_descriptor_state_impl(vk::PipelineBindPoint pipeline_bind_point);
-	void                      flush_pipeline_state_impl(vkb::core::HPPDevice &device, vk::PipelineBindPoint pipeline_bind_point);
-	vkb::core::HPPRenderPass &get_render_pass_impl(vkb::core::HPPDevice                                           &device,
-	                                               vkb::rendering::HPPRenderTarget const                          &render_target,
+	void                      flush_pipeline_state_impl(vkb::core::DeviceCpp &device, vk::PipelineBindPoint pipeline_bind_point);
+	vkb::core::HPPRenderPass &get_render_pass_impl(vkb::core::DeviceCpp                                           &device,
+	                                               vkb::rendering::RenderTargetCpp const                          &render_target,
 	                                               std::vector<vkb::common::HPPLoadStoreInfo> const               &load_store_infos,
 	                                               std::vector<std::unique_ptr<vkb::rendering::SubpassCpp>> const &subpasses);
 	void                      image_memory_barrier_impl(vkb::core::HPPImageView const &image_view, vkb::common::HPPImageMemoryBarrier const &memory_barrier) const;
@@ -416,7 +405,7 @@ inline void CommandBuffer<bindingType>::begin_query(QueryPoolType const &query_p
 }
 
 template <vkb::BindingType bindingType>
-inline void CommandBuffer<bindingType>::begin_render_pass(RenderTargetType const                                                   &render_target,
+inline void CommandBuffer<bindingType>::begin_render_pass(vkb::rendering::RenderTarget<bindingType> const                          &render_target,
                                                           std::vector<LoadStoreInfoType> const                                     &load_store_infos,
                                                           std::vector<ClearValueType> const                                        &clear_values,
                                                           std::vector<std::unique_ptr<vkb::rendering::Subpass<bindingType>>> const &subpasses,
@@ -434,11 +423,11 @@ inline void CommandBuffer<bindingType>::begin_render_pass(RenderTargetType const
 }
 
 template <vkb::BindingType bindingType>
-inline void CommandBuffer<bindingType>::begin_render_pass(RenderTargetType const            &render_target,
-                                                          RenderPassType const              &render_pass,
-                                                          FramebufferType const             &framebuffer,
-                                                          std::vector<ClearValueType> const &clear_values,
-                                                          SubpassContentsType                contents)
+inline void CommandBuffer<bindingType>::begin_render_pass(vkb::rendering::RenderTarget<bindingType> const &render_target,
+                                                          RenderPassType const                            &render_pass,
+                                                          FramebufferType const                           &framebuffer,
+                                                          std::vector<ClearValueType> const               &clear_values,
+                                                          SubpassContentsType                              contents)
 {
 	if constexpr (bindingType == vkb::BindingType::Cpp)
 	{
@@ -446,7 +435,7 @@ inline void CommandBuffer<bindingType>::begin_render_pass(RenderTargetType const
 	}
 	else
 	{
-		begin_render_pass_impl(reinterpret_cast<vkb::rendering::HPPRenderTarget const &>(render_target),
+		begin_render_pass_impl(reinterpret_cast<vkb::rendering::RenderTargetCpp const &>(render_target),
 		                       reinterpret_cast<vkb::core::HPPRenderPass const &>(render_pass),
 		                       reinterpret_cast<vkb::core::HPPFramebuffer const &>(framebuffer),
 		                       reinterpret_cast<std::vector<vk::ClearValue> const &>(clear_values),
@@ -455,7 +444,7 @@ inline void CommandBuffer<bindingType>::begin_render_pass(RenderTargetType const
 }
 
 template <vkb::BindingType bindingType>
-inline void CommandBuffer<bindingType>::begin_render_pass_impl(vkb::rendering::HPPRenderTarget const &render_target,
+inline void CommandBuffer<bindingType>::begin_render_pass_impl(vkb::rendering::RenderTargetCpp const &render_target,
                                                                vkb::core::HPPRenderPass const        &render_pass,
                                                                vkb::core::HPPFramebuffer const       &framebuffer,
                                                                std::vector<vk::ClearValue> const     &clear_values,
@@ -885,7 +874,7 @@ inline void CommandBuffer<bindingType>::execute_commands_impl(std::vector<std::s
 
 template <vkb::BindingType bindingType>
 inline typename vkb::core::CommandBuffer<bindingType>::RenderPassType &
-    CommandBuffer<bindingType>::get_render_pass(RenderTargetType const                                                   &render_target,
+    CommandBuffer<bindingType>::get_render_pass(vkb::rendering::RenderTarget<bindingType> const                          &render_target,
                                                 std::vector<LoadStoreInfoType> const                                     &load_store_infos,
                                                 std::vector<std::unique_ptr<vkb::rendering::Subpass<bindingType>>> const &subpasses)
 {
@@ -896,8 +885,8 @@ inline typename vkb::core::CommandBuffer<bindingType>::RenderPassType &
 	else
 	{
 		return reinterpret_cast<vkb::RenderPass &>(
-		    get_render_pass_impl(reinterpret_cast<vkb::core::HPPDevice &>(this->get_device()),
-		                         reinterpret_cast<vkb::rendering::HPPRenderTarget const &>(render_target),
+		    get_render_pass_impl(reinterpret_cast<vkb::core::DeviceCpp &>(this->get_device()),
+		                         reinterpret_cast<vkb::rendering::RenderTargetCpp const &>(render_target),
 		                         reinterpret_cast<std::vector<vkb::common::HPPLoadStoreInfo> const &>(load_store_infos),
 		                         reinterpret_cast<std::vector<std::unique_ptr<vkb::rendering::SubpassCpp>> const &>(subpasses)));
 	}
@@ -905,8 +894,8 @@ inline typename vkb::core::CommandBuffer<bindingType>::RenderPassType &
 
 template <vkb::BindingType bindingType>
 inline vkb::core::HPPRenderPass &
-    CommandBuffer<bindingType>::get_render_pass_impl(vkb::core::HPPDevice                                           &device,
-                                                     vkb::rendering::HPPRenderTarget const                          &render_target,
+    CommandBuffer<bindingType>::get_render_pass_impl(vkb::core::DeviceCpp                                           &device,
+                                                     vkb::rendering::RenderTargetCpp const                          &render_target,
                                                      std::vector<vkb::common::HPPLoadStoreInfo> const               &load_store_infos,
                                                      std::vector<std::unique_ptr<vkb::rendering::SubpassCpp>> const &subpasses)
 {
@@ -932,7 +921,7 @@ inline vkb::core::HPPRenderPass &
 }
 
 template <vkb::BindingType bindingType>
-inline void CommandBuffer<bindingType>::image_memory_barrier(RenderTargetType &render_target, uint32_t view_index, ImageMemoryBarrierType const &memory_barrier) const
+inline void CommandBuffer<bindingType>::image_memory_barrier(vkb::rendering::RenderTarget<bindingType> &render_target, uint32_t view_index, ImageMemoryBarrierType const &memory_barrier) const
 {
 	auto const &image_view = render_target.get_views()[view_index];
 
@@ -1307,12 +1296,12 @@ inline void CommandBuffer<bindingType>::flush(vk::PipelineBindPoint pipeline_bin
 	}
 	else
 	{
-		flush_impl(reinterpret_cast<vkb::core::HPPDevice &>(this->get_device()), pipeline_bind_point);
+		flush_impl(reinterpret_cast<vkb::core::DeviceCpp &>(this->get_device()), pipeline_bind_point);
 	}
 }
 
 template <vkb::BindingType bindingType>
-inline void CommandBuffer<bindingType>::flush_impl(vkb::core::HPPDevice &device, vk::PipelineBindPoint pipeline_bind_point)
+inline void CommandBuffer<bindingType>::flush_impl(vkb::core::DeviceCpp &device, vk::PipelineBindPoint pipeline_bind_point)
 {
 	flush_pipeline_state_impl(device, pipeline_bind_point);
 	flush_push_constants();
@@ -1472,7 +1461,7 @@ inline void CommandBuffer<bindingType>::flush_descriptor_state_impl(vk::Pipeline
 }
 
 template <vkb::BindingType bindingType>
-inline void CommandBuffer<bindingType>::flush_pipeline_state_impl(vkb::core::HPPDevice &device, vk::PipelineBindPoint pipeline_bind_point)
+inline void CommandBuffer<bindingType>::flush_pipeline_state_impl(vkb::core::DeviceCpp &device, vk::PipelineBindPoint pipeline_bind_point)
 {
 	// Create a new pipeline only if the graphics state changed
 	if (!pipeline_state.is_dirty())

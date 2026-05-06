@@ -1,4 +1,4 @@
-/* Copyright (c) 2023-2025, Google
+/* Copyright (c) 2023-2026, Google
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -25,7 +25,7 @@ static constexpr uint32_t INVALID_IMAGE_INDEX = std::numeric_limits<uint32_t>::m
 
 void SwapchainRecreation::get_queue()
 {
-	queue = &get_device().get_suitable_graphics_queue();
+	queue = &get_device().get_queue_by_flags(VK_QUEUE_GRAPHICS_BIT, 0);
 
 	// Make sure presentation is supported on this queue.  This is practically always the case;
 	// if a platform/driver is found where this is not true, all queues supporting
@@ -896,8 +896,6 @@ SwapchainRecreation::SwapchainRecreation()
 	if ((use_maintenance1 == nullptr) || (strcmp(use_maintenance1, "no") != 0))
 	{
 		// Request sample-specific extensions as optional
-		add_instance_extension(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME, true);
-		add_instance_extension(VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME, true);
 		add_device_extension(VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME, true);
 	}
 	else
@@ -973,24 +971,31 @@ SwapchainRecreation::~SwapchainRecreation()
 	}
 }
 
-void SwapchainRecreation::request_gpu_features(vkb::PhysicalDevice &gpu)
+void SwapchainRecreation::request_gpu_features(vkb::core::PhysicalDeviceC &gpu)
 {
 	if (allow_maintenance1)
 	{
-		REQUEST_OPTIONAL_FEATURE(gpu,
-		                         VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT,
-		                         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT,
-		                         swapchainMaintenance1);
+		REQUEST_OPTIONAL_FEATURE(gpu, VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT, swapchainMaintenance1);
 	}
 }
 
-std::unique_ptr<vkb::Device> SwapchainRecreation::create_device(vkb::PhysicalDevice &gpu)
+void SwapchainRecreation::request_instance_extensions(std::unordered_map<std::string, vkb::RequestMode> &requested_extensions) const
 {
-	std::unique_ptr<vkb::Device> device = vkb::VulkanSampleC::create_device(gpu);
+	vkb::VulkanSampleC::request_instance_extensions(requested_extensions);
+	if (allow_maintenance1)
+	{
+		requested_extensions[VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME] = vkb::RequestMode::Optional;
+		requested_extensions[VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME]      = vkb::RequestMode::Optional;
+	}
+}
 
-	has_maintenance1 = get_instance().is_enabled(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME) &&
-	                   get_instance().is_enabled(VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME) &&
-	                   device->is_enabled(VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME);
+std::unique_ptr<vkb::core::DeviceC> SwapchainRecreation::create_device(vkb::core::PhysicalDeviceC &gpu)
+{
+	std::unique_ptr<vkb::core::DeviceC> device = vkb::VulkanSampleC::create_device(gpu);
+
+	has_maintenance1 = get_instance().is_extension_enabled(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME) &&
+	                   get_instance().is_extension_enabled(VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME) &&
+	                   device->is_extension_enabled(VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME);
 
 	LOGI("------------------------------------");
 	LOGI("USAGE:");

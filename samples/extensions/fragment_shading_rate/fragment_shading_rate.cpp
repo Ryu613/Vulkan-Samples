@@ -1,4 +1,4 @@
-/* Copyright (c) 2020-2025, Sascha Willems
+/* Copyright (c) 2020-2026, Sascha Willems
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -26,7 +26,6 @@ FragmentShadingRate::FragmentShadingRate()
 {
 	title = "Fragment shading rate";
 	// Enable instance and device extensions required to use VK_KHR_fragment_shading_rate
-	add_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 	add_device_extension(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
 	add_device_extension(VK_KHR_MULTIVIEW_EXTENSION_NAME);
 	add_device_extension(VK_KHR_MAINTENANCE2_EXTENSION_NAME);
@@ -48,14 +47,11 @@ FragmentShadingRate::~FragmentShadingRate()
 	}
 }
 
-void FragmentShadingRate::request_gpu_features(vkb::PhysicalDevice &gpu)
+void FragmentShadingRate::request_gpu_features(vkb::core::PhysicalDeviceC &gpu)
 {
 	// Enable the shading rate attachment feature required by this sample
 	// These are passed to device creation via a pNext structure chain
-	REQUEST_REQUIRED_FEATURE(gpu,
-	                         VkPhysicalDeviceFragmentShadingRateFeaturesKHR,
-	                         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR,
-	                         attachmentFragmentShadingRate);
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceFragmentShadingRateFeaturesKHR, attachmentFragmentShadingRate);
 
 	// Enable anisotropic filtering if supported
 	if (gpu.get_features().samplerAnisotropy)
@@ -104,7 +100,7 @@ void FragmentShadingRate::create_shading_rate_attachment()
 	VkMemoryAllocateInfo memory_allocate_info{};
 	memory_allocate_info.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	memory_allocate_info.allocationSize  = memory_requirements.size;
-	memory_allocate_info.memoryTypeIndex = get_device().get_memory_type(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	memory_allocate_info.memoryTypeIndex = get_device().get_gpu().get_memory_type(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VK_CHECK(vkAllocateMemory(get_device().get_handle(), &memory_allocate_info, nullptr, &shading_rate_image.memory));
 	VK_CHECK(vkBindImageMemory(get_device().get_handle(), shading_rate_image.image, shading_rate_image.memory, 0));
 

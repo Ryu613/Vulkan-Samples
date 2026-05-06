@@ -1,4 +1,4 @@
-/* Copyright (c) 2020-2025, Sascha Willems
+/* Copyright (c) 2020-2026, Sascha Willems
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -71,10 +71,10 @@ DebugUtils::~DebugUtils()
  */
 void DebugUtils::debug_check_extension()
 {
-	std::vector<const char *> enabled_instance_extensions = get_instance().get_extensions();
+	std::vector<std::string> enabled_instance_extensions = get_instance().get_enabled_extensions();
 	for (auto &enabled_extension : enabled_instance_extensions)
 	{
-		if (strcmp(enabled_extension, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0)
+		if (enabled_extension == VK_EXT_DEBUG_UTILS_EXTENSION_NAME)
 		{
 			debug_utils_supported = true;
 			break;
@@ -283,7 +283,7 @@ void DebugUtils::debug_name_objects()
 	set_object_name(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t) filter_pass.render_pass, "Bloom filter pass render pass");
 }
 
-void DebugUtils::request_gpu_features(vkb::PhysicalDevice &gpu)
+void DebugUtils::request_gpu_features(vkb::core::PhysicalDeviceC &gpu)
 {
 	// Enable anisotropic filtering if supported
 	if (gpu.get_features().samplerAnisotropy)
@@ -520,7 +520,7 @@ void DebugUtils::create_attachment(VkFormat format, VkImageUsageFlagBits usage, 
 	VK_CHECK(vkCreateImage(get_device().get_handle(), &image, nullptr, &attachment->image));
 	vkGetImageMemoryRequirements(get_device().get_handle(), attachment->image, &memory_requirements);
 	memory_allocate_info.allocationSize  = memory_requirements.size;
-	memory_allocate_info.memoryTypeIndex = get_device().get_memory_type(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	memory_allocate_info.memoryTypeIndex = get_device().get_gpu().get_memory_type(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VK_CHECK(vkAllocateMemory(get_device().get_handle(), &memory_allocate_info, nullptr, &attachment->mem));
 	VK_CHECK(vkBindImageMemory(get_device().get_handle(), attachment->image, attachment->mem, 0));
 

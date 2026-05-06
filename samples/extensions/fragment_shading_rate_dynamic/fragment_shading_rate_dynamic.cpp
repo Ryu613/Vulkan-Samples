@@ -1,4 +1,4 @@
-/* Copyright (c) 2021-2025, Holochip
+/* Copyright (c) 2021-2026, Holochip
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -25,7 +25,6 @@ FragmentShadingRateDynamic::FragmentShadingRateDynamic() :
 	(void) ubo_scene.skysphere_modelview;        // this is used in the shader
 
 	// Enable instance and device extensions required to use VK_KHR_fragment_shading_rate
-	add_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 	add_device_extension(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
 	add_device_extension(VK_KHR_MULTIVIEW_EXTENSION_NAME);
 	add_device_extension(VK_KHR_MAINTENANCE2_EXTENSION_NAME);
@@ -60,18 +59,12 @@ FragmentShadingRateDynamic::~FragmentShadingRateDynamic()
 	}
 }
 
-void FragmentShadingRateDynamic::request_gpu_features(vkb::PhysicalDevice &gpu)
+void FragmentShadingRateDynamic::request_gpu_features(vkb::core::PhysicalDeviceC &gpu)
 {
 	// Enable the shading rate attachment feature required by this sample
 	// These are passed to device creation via a pNext structure chain
-	REQUEST_REQUIRED_FEATURE(gpu,
-	                         VkPhysicalDeviceFragmentShadingRateFeaturesKHR,
-	                         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR,
-	                         attachmentFragmentShadingRate);
-	REQUEST_REQUIRED_FEATURE(gpu,
-	                         VkPhysicalDeviceFragmentShadingRateFeaturesKHR,
-	                         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR,
-	                         pipelineFragmentShadingRate);
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceFragmentShadingRateFeaturesKHR, attachmentFragmentShadingRate);
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceFragmentShadingRateFeaturesKHR, pipelineFragmentShadingRate);
 
 	// Enable anisotropic filtering if supported
 	if (gpu.get_features().samplerAnisotropy)
@@ -173,7 +166,7 @@ void FragmentShadingRateDynamic::create_shading_rate_attachment()
 		submit.commandBufferCount = 1;
 		submit.pCommandBuffers    = &cmd;
 
-		auto fence = get_device().request_fence();
+		auto fence = get_device().get_fence_pool().request_fence();
 		VK_CHECK(vkQueueSubmit(queue, 1, &submit, fence));
 		VK_CHECK(vkWaitForFences(get_device().get_handle(), 1, &fence, VK_TRUE, UINT64_MAX));
 
@@ -194,7 +187,7 @@ void FragmentShadingRateDynamic::create_shading_rate_attachment()
 		frequency_content_image_view = std::make_unique<vkb::core::ImageView>(*frequency_content_image, VK_IMAGE_VIEW_TYPE_2D, VK_FORMAT_R8G8_UINT);
 
 		{
-			auto _cmd = get_device().request_command_buffer();
+			auto _cmd = get_device().get_command_pool().request_command_buffer();
 			_cmd->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 			auto _memory_barrier            = vkb::ImageMemoryBarrier();
 			_memory_barrier.dst_access_mask = 0;
@@ -206,7 +199,7 @@ void FragmentShadingRateDynamic::create_shading_rate_attachment()
 			_cmd->end();
 
 			auto &queue  = get_device().get_queue_by_flags(VK_QUEUE_GRAPHICS_BIT, 0);
-			auto  _fence = get_device().request_fence();
+			auto  _fence = get_device().get_fence_pool().request_fence();
 			queue.submit(*_cmd, _fence);
 			VK_CHECK(vkWaitForFences(get_device().get_handle(), 1, &_fence, VK_TRUE, UINT64_MAX));
 		}
@@ -1112,9 +1105,9 @@ bool FragmentShadingRateDynamic::prepare(const vkb::ApplicationOptions &options)
 		return false;
 	}
 
-	const auto enabled_instance_extensions = get_instance().get_extensions();
+	const auto enabled_instance_extensions = get_instance().get_enabled_extensions();
 	debug_utils_supported =
-	    std::ranges::find_if(enabled_instance_extensions, [](const char *ext) { return strcmp(ext, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0; }) !=
+	    std::ranges::find_if(enabled_instance_extensions, [](std::string const &ext) { return ext == VK_EXT_DEBUG_UTILS_EXTENSION_NAME; }) !=
 	    enabled_instance_extensions.cend();
 
 	camera.type = vkb::CameraType::FirstPerson;

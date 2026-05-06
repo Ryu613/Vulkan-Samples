@@ -1,4 +1,5 @@
-/* Copyright (c) 2024-2025, Sascha Willems
+/* Copyright (c) 2024-2026, Sascha Willems
+ * Copyright (c) 2026, Arm Limited and Contributors
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -31,12 +32,17 @@ DynamicRenderingLocalRead::DynamicRenderingLocalRead()
 	camera.set_perspective(60.f, static_cast<float>(width) / static_cast<float>(height), 256.f, 0.1f);
 
 #if defined(USE_DYNAMIC_RENDERING)
-	set_api_version(VK_API_VERSION_1_2);
-	add_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 	add_device_extension(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
 	add_device_extension(VK_KHR_DYNAMIC_RENDERING_LOCAL_READ_EXTENSION_NAME);
 	// To simplify barrier setup used for dynamic rendering, we use sync2
 	add_device_extension(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
+
+	// Slang shaders require additional extensions to be enabled
+	if (get_shading_language() == vkb::ShadingLanguage::SLANG)
+	{
+		add_device_extension(VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME);
+		add_device_extension(VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME);
+	}
 
 	// Dynamic rendering doesn't use render passes
 	// To make sure that framework related classes like the user interface are aware of this, we explicitly st the base class' renderpass to a null handle
@@ -64,19 +70,29 @@ DynamicRenderingLocalRead::~DynamicRenderingLocalRead()
 	}
 }
 
-void DynamicRenderingLocalRead::request_gpu_features(vkb::PhysicalDevice &gpu)
+uint32_t DynamicRenderingLocalRead::get_api_version() const
+{
+	return VK_API_VERSION_1_2;
+}
+
+uint32_t DynamicRenderingLocalRead::get_gui_subpass() const
+{
+	return 2;
+}
+
+void DynamicRenderingLocalRead::request_gpu_features(vkb::core::PhysicalDeviceC &gpu)
 {
 	if (gpu.get_features().samplerAnisotropy)
 	{
 		gpu.get_mutable_requested_features().samplerAnisotropy = true;
 	}
 #if defined(USE_DYNAMIC_RENDERING)
-	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceDynamicRenderingFeaturesKHR, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR, dynamicRendering);
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceDynamicRenderingFeaturesKHR, dynamicRendering);
 
-	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceDynamicRenderingLocalReadFeaturesKHR, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_LOCAL_READ_FEATURES_KHR, dynamicRenderingLocalRead);
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceDynamicRenderingLocalReadFeaturesKHR, dynamicRenderingLocalRead);
 
 	// To simplify barrier setup used for dynamic rendering, we use sync2
-	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceSynchronization2FeaturesKHR, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR, synchronization2);
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceSynchronization2FeaturesKHR, synchronization2);
 #endif
 }
 
@@ -308,17 +324,6 @@ void DynamicRenderingLocalRead::setup_render_pass()
 #endif
 }
 
-void DynamicRenderingLocalRead::prepare_gui()
-{
-#if !defined(USE_DYNAMIC_RENDERING)
-	create_gui(*window, nullptr, 15.0f, true);
-	get_gui().set_subpass(2);
-	get_gui().prepare(pipeline_cache, render_pass,
-	                  {load_shader("uioverlay/uioverlay.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
-	                   load_shader("uioverlay/uioverlay.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)});
-#endif
-}
-
 void DynamicRenderingLocalRead::load_assets()
 {
 	vkb::GLTFLoader loader{get_device()};
@@ -369,7 +374,7 @@ void DynamicRenderingLocalRead::create_attachment(VkFormat format, VkImageUsageF
 	VK_CHECK(vkCreateImage(get_device().get_handle(), &image_ci, nullptr, &attachment.image));
 	vkGetImageMemoryRequirements(get_device().get_handle(), attachment.image, &memory_requirements);
 	memory_ai.allocationSize  = memory_requirements.size;
-	memory_ai.memoryTypeIndex = get_device().get_memory_type(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	memory_ai.memoryTypeIndex = get_device().get_gpu().get_memory_type(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VK_CHECK(vkAllocateMemory(get_device().get_handle(), &memory_ai, nullptr, &attachment.memory));
 	VK_CHECK(vkBindImageMemory(get_device().get_handle(), attachment.image, attachment.memory, 0));
 
@@ -438,8 +443,7 @@ void DynamicRenderingLocalRead::prepare_buffers()
 
 void DynamicRenderingLocalRead::update_lights_buffer()
 {
-	std::random_device                    rnd_device;
-	std::default_random_engine            rnd_gen(rnd_device());
+	std::default_random_engine            rnd_gen(lock_simulation_speed ? 0 : std::random_device{}());
 	std::uniform_real_distribution<float> rnd_dist(-1.0f, 1.0f);
 	std::uniform_real_distribution<float> rnd_col(0.0f, 0.5f);
 
@@ -679,21 +683,13 @@ void DynamicRenderingLocalRead::prepare_pipelines()
 		pipeline_rendering_create_info.stencilAttachmentFormat = depth_format;
 	}
 
-	VkRenderingInputAttachmentIndexInfo rendering_attachment_index_info{VK_STRUCTURE_TYPE_RENDERING_INPUT_ATTACHMENT_INDEX_INFO};
 	pipeline_rendering_create_info.pNext = &rendering_attachment_index_info;
-
-	std::array<uint32_t, 4> colorAttachments                     = {VK_ATTACHMENT_UNUSED, 0, 1, 2};
-	rendering_attachment_index_info.pNext                        = nullptr;
-	rendering_attachment_index_info.colorAttachmentCount         = colorAttachments.size();
-	rendering_attachment_index_info.pColorAttachmentInputIndices = colorAttachments.data();
-	rendering_attachment_index_info.pDepthInputAttachmentIndex   = nullptr;
-	rendering_attachment_index_info.pStencilInputAttachmentIndex = nullptr;
 #else
 	pipeline_create_info.subpass = 0;
 #endif
 
-	shader_stages[0] = load_shader("dynamic_rendering_local_read/scene_opaque.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-	shader_stages[1] = load_shader("dynamic_rendering_local_read/scene_opaque.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+	shader_stages[0] = load_shader("dynamic_rendering_local_read", "scene_opaque.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+	shader_stages[1] = load_shader("dynamic_rendering_local_read", "scene_opaque.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 	VK_CHECK(vkCreateGraphicsPipelines(get_device().get_handle(), pipeline_cache, 1, &pipeline_create_info, nullptr, &scene_opaque_pass.pipeline));
 
 	/*
@@ -731,8 +727,8 @@ void DynamicRenderingLocalRead::prepare_pipelines()
 	pipeline_create_info.subpass = 2;
 #endif
 
-	shader_stages[0] = load_shader("dynamic_rendering_local_read/scene_transparent.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-	shader_stages[1] = load_shader("dynamic_rendering_local_read/scene_transparent.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+	shader_stages[0] = load_shader("dynamic_rendering_local_read", "scene_transparent.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+	shader_stages[1] = load_shader("dynamic_rendering_local_read", "scene_transparent.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 	VK_CHECK(vkCreateGraphicsPipelines(get_device().get_handle(), pipeline_cache, 1, &pipeline_create_info, nullptr, &scene_transparent_pass.pipeline));
 
 	/*
@@ -771,12 +767,12 @@ void DynamicRenderingLocalRead::prepare_pipelines()
 	empty_vertex_input_state.sType         = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 	pipeline_create_info.pVertexInputState = &empty_vertex_input_state;
 
-	shader_stages[0] = load_shader("dynamic_rendering_local_read/composition.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-	shader_stages[1] = load_shader("dynamic_rendering_local_read/composition.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+	shader_stages[0] = load_shader("dynamic_rendering_local_read", "composition.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+	shader_stages[1] = load_shader("dynamic_rendering_local_read", "composition.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 	VK_CHECK(vkCreateGraphicsPipelines(get_device().get_handle(), pipeline_cache, 1, &pipeline_create_info, nullptr, &composition_pass.pipeline));
 }
 
-void DynamicRenderingLocalRead::draw_scene(std::unique_ptr<vkb::sg::Scene> &scene, VkCommandBuffer cmd, VkPipelineLayout pipeline_layout)
+void DynamicRenderingLocalRead::draw_scene(std::unique_ptr<vkb::scene_graph::SceneC> &scene, VkCommandBuffer cmd, VkPipelineLayout pipeline_layout)
 {
 	for (auto &mesh : scene->get_components<vkb::sg::Mesh>())
 	{
@@ -873,11 +869,10 @@ void DynamicRenderingLocalRead::build_command_buffers()
 		depth_attachment_info.clearValue                   = clear_values[1];
 
 		VkRenderingInfoKHR render_info   = vkb::initializers::rendering_info();
-		render_info.renderArea           = {0, 0, width, height};
+		render_info.renderArea           = {0, 0, static_cast<uint32_t>(attachment_width), static_cast<uint32_t>(attachment_height)};
 		render_info.layerCount           = 1;
 		render_info.colorAttachmentCount = 4;
 		render_info.pColorAttachments    = &color_attachment_info[0];
-		render_info.renderArea           = {0, 0, width, height};
 
 		render_info.pDepthAttachment = &depth_attachment_info;
 		if (!vkb::is_depth_only_format(depth_format))
@@ -895,6 +890,9 @@ void DynamicRenderingLocalRead::build_command_buffers()
 
 		VkRect2D scissor = vkb::initializers::rect2D(width, height, 0, 0);
 		vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+		// Set input attachment indices for the composition and transparent passes
+		vkCmdSetRenderingInputAttachmentIndicesKHR(cmd, &rendering_attachment_index_info);
 
 		/*
 		    First draw
@@ -939,10 +937,11 @@ void DynamicRenderingLocalRead::build_command_buffers()
 		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, scene_transparent_pass.pipeline_layout, 0, 1, &scene_transparent_pass.descriptor_set, 0, nullptr);
 		draw_scene(scenes.transparent, cmd, scene_transparent_pass.pipeline_layout);
 
-		// @todo: UI is disabled for now, required some fixup in the framework to make it work properly with dynamic rendering local reads
-		// draw_ui(draw_cmd_buffers[i]);
-
+		// End main rendering
 		vkCmdEndRenderingKHR(cmd);
+
+		// Draw UI
+		draw_ui(draw_cmd_buffers[i], i);
 
 		/*
 		    Dynamic rendering end

@@ -1,4 +1,4 @@
-/* Copyright (c) 2019-2025, Sascha Willems
+/* Copyright (c) 2019-2026, Sascha Willems
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -36,7 +36,6 @@ PushDescriptors::PushDescriptors()
 	title = "Push descriptors";
 
 	// Enable extension required for push descriptors
-	add_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 	add_device_extension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
 }
 
@@ -57,7 +56,7 @@ PushDescriptors::~PushDescriptors()
 	}
 }
 
-void PushDescriptors::request_gpu_features(vkb::PhysicalDevice &gpu)
+void PushDescriptors::request_gpu_features(vkb::core::PhysicalDeviceC &gpu)
 {
 	// Enable anisotropic filtering if supported
 	if (gpu.get_features().samplerAnisotropy)

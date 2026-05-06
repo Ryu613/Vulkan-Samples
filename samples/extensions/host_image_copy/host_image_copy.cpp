@@ -1,4 +1,4 @@
-/* Copyright (c) 2024-2025, Sascha Willems
+/* Copyright (c) 2024-2026, Sascha Willems
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -24,7 +24,6 @@ HostImageCopy::HostImageCopy()
 	rotation = {-25.0f, 45.0f, 0.0f};
 
 	// Enable required extensions
-	add_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 	add_device_extension(VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME);
 	add_device_extension(VK_KHR_COPY_COMMANDS_2_EXTENSION_NAME);
 	add_device_extension(VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME);
@@ -43,10 +42,10 @@ HostImageCopy::~HostImageCopy()
 }
 
 // Enable physical device features required for this example
-void HostImageCopy::request_gpu_features(vkb::PhysicalDevice &gpu)
+void HostImageCopy::request_gpu_features(vkb::core::PhysicalDeviceC &gpu)
 {
 	// Enable host image copy feature (required for this sample to work)
-	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceHostImageCopyFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_FEATURES_EXT, hostImageCopy);
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceHostImageCopyFeaturesEXT, hostImageCopy);
 
 	// Enable anisotropic filtering if supported
 	if (gpu.get_features().samplerAnisotropy)
@@ -127,7 +126,7 @@ void HostImageCopy::load_texture()
 	VkMemoryRequirements memory_requirements  = {};
 	vkGetImageMemoryRequirements(get_device().get_handle(), texture.image, &memory_requirements);
 	memory_allocate_info.allocationSize  = memory_requirements.size;
-	memory_allocate_info.memoryTypeIndex = get_device().get_memory_type(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	memory_allocate_info.memoryTypeIndex = get_device().get_gpu().get_memory_type(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VK_CHECK(vkAllocateMemory(get_device().get_handle(), &memory_allocate_info, nullptr, &texture.device_memory));
 	VK_CHECK(vkBindImageMemory(get_device().get_handle(), texture.image, texture.device_memory, 0));
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2022-2025, Mobica Limited
+/* Copyright (c) 2022-2026, Mobica Limited
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -21,7 +21,6 @@ VertexDynamicState::VertexDynamicState()
 {
 	title = "Vertex Dynamic State";
 
-	add_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 	add_device_extension(VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME);
 }
 
@@ -445,14 +444,11 @@ void VertexDynamicState::create_descriptor_sets()
 	vkUpdateDescriptorSets(get_device().get_handle(), static_cast<uint32_t>(write_descriptor_sets.size()), write_descriptor_sets.data(), 0, nullptr);
 }
 
-void VertexDynamicState::request_gpu_features(vkb::PhysicalDevice &gpu)
+void VertexDynamicState::request_gpu_features(vkb::core::PhysicalDeviceC &gpu)
 {
 	/* Enable extension features required by this sample
 	   These are passed to device creation via a pNext structure chain */
-	REQUEST_REQUIRED_FEATURE(gpu,
-	                         VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT,
-	                         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_INPUT_DYNAMIC_STATE_FEATURES_EXT,
-	                         vertexInputDynamicState);
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT, vertexInputDynamicState);
 
 	if (gpu.get_features().samplerAnisotropy)
 	{

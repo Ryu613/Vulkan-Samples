@@ -1,6 +1,6 @@
 /*
- * Copyright 2023-2025 Nintendo
- * Copyright 2023-2025, Sascha Willems
+ * Copyright 2023-2026 Nintendo
+ * Copyright 2023-2026, Sascha Willems
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,11 +25,6 @@ ShaderObject::ShaderObject()
 {
 	title = "Shader Object";
 	rng   = std::default_random_engine(12345);        // Use a fixed seed, makes random deterministic.
-
-	// Show that shader object is usable with Vulkan 1.1 + Dynamic Rendering
-	set_api_version(VK_API_VERSION_1_1);
-
-	add_instance_layer("VK_LAYER_KHRONOS_shader_object");
 
 	// Enable the Shader Object extension
 	add_device_extension(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
@@ -304,10 +299,10 @@ void ShaderObject::create_default_sampler()
 	VK_CHECK(vkCreateSampler(get_device().get_handle(), &sampler_create_info, nullptr, &standard_sampler));
 }
 
-void ShaderObject::request_gpu_features(vkb::PhysicalDevice &gpu)
+void ShaderObject::request_gpu_features(vkb::core::PhysicalDeviceC &gpu)
 {
 	// Enable Shader Object
-	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceShaderObjectFeaturesEXT, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT, shaderObject);
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceShaderObjectFeaturesEXT, shaderObject);
 
 	// Enable anisotropic filtering if supported
 	if (gpu.get_features().samplerAnisotropy)
@@ -323,10 +318,7 @@ void ShaderObject::request_gpu_features(vkb::PhysicalDevice &gpu)
 	}
 
 	// Enable Dynamic Rendering
-	REQUEST_REQUIRED_FEATURE(gpu,
-	                         VkPhysicalDeviceDynamicRenderingFeaturesKHR,
-	                         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR,
-	                         dynamicRendering);
+	REQUEST_REQUIRED_FEATURE(gpu, VkPhysicalDeviceDynamicRenderingFeaturesKHR, dynamicRendering);
 
 	// Enable Geometry Shaders
 	auto &requested_geometry_shader          = gpu.get_mutable_requested_features();
@@ -381,6 +373,12 @@ void ShaderObject::request_gpu_features(vkb::PhysicalDevice &gpu)
 			supported_output_formats.push_back(format);
 		}
 	}
+}
+
+void ShaderObject::request_layers(std::unordered_map<std::string, vkb::RequestMode> &requested_layers) const
+{
+	ApiVulkanSample::request_layers(requested_layers);
+	requested_layers["VK_LAYER_KHRONOS_shader_object"] = vkb::RequestMode::Required;
 }
 
 void ShaderObject::load_assets()
@@ -1894,7 +1892,7 @@ ShaderObject::Image ShaderObject::create_output_image(VkFormat format, VkImageUs
 	// Get and set memory allocation size then allocate and bind memory
 	vkGetImageMemoryRequirements(get_device().get_handle(), image.image, &memory_requirements);
 	memory_allocation_info.allocationSize  = memory_requirements.size;
-	memory_allocation_info.memoryTypeIndex = get_device().get_memory_type(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	memory_allocation_info.memoryTypeIndex = get_device().get_gpu().get_memory_type(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VK_CHECK(vkAllocateMemory(get_device().get_handle(), &memory_allocation_info, nullptr, &image.memory));
 	VK_CHECK(vkBindImageMemory(get_device().get_handle(), image.image, image.memory, 0));
 

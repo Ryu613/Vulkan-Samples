@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
+/* Copyright (c) 2023-2025, NVIDIA CORPORATION. All rights reserved.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -24,7 +24,11 @@ namespace vkb
 {
 namespace core
 {
-class HPPDevice;
+template <vkb::BindingType bindingType>
+class Device;
+using DeviceCpp = Device<vkb::BindingType::Cpp>;
+using DeviceC   = Device<vkb::BindingType::C>;
+
 class HPPShaderModule;
 struct HPPShaderResource;
 
@@ -39,11 +43,11 @@ class HPPDescriptorSetLayout : private vkb::DescriptorSetLayout
 	using vkb::DescriptorSetLayout::get_index;
 
   public:
-	HPPDescriptorSetLayout(vkb::core::HPPDevice                            &device,
+	HPPDescriptorSetLayout(vkb::core::DeviceCpp                            &device,
 	                       const uint32_t                                   set_index,
 	                       const std::vector<vkb::core::HPPShaderModule *> &shader_modules,
 	                       const std::vector<vkb::core::HPPShaderResource> &resource_set) :
-	    vkb::DescriptorSetLayout(reinterpret_cast<vkb::Device &>(device),
+	    vkb::DescriptorSetLayout(reinterpret_cast<vkb::core::DeviceC &>(device),
 	                             set_index,
 	                             reinterpret_cast<std::vector<vkb::ShaderModule *> const &>(shader_modules),
 	                             reinterpret_cast<std::vector<vkb::ShaderResource> const &>(resource_set))
@@ -58,6 +62,12 @@ class HPPDescriptorSetLayout : private vkb::DescriptorSetLayout
 	{
 		return std::unique_ptr<vk::DescriptorSetLayoutBinding>(
 		    reinterpret_cast<vk::DescriptorSetLayoutBinding *>(vkb::DescriptorSetLayout::get_layout_binding(binding_index).release()));
+	}
+
+	std::unique_ptr<vk::DescriptorSetLayoutBinding> get_layout_binding(std::string const &name) const
+	{
+		return std::unique_ptr<vk::DescriptorSetLayoutBinding>(
+		    reinterpret_cast<vk::DescriptorSetLayoutBinding *>(vkb::DescriptorSetLayout::get_layout_binding(name).release()));
 	}
 
 	vk::DescriptorBindingFlagsEXT get_layout_binding_flag(const uint32_t binding_index) const

@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
+/* Copyright (c) 2023-2026, NVIDIA CORPORATION. All rights reserved.
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -25,7 +25,6 @@ namespace vkb
 {
 namespace core
 {
-class HPPDevice;
 class HPPDescriptorSetLayout;
 
 /**
@@ -35,7 +34,7 @@ class HPPDescriptorSetLayout;
 class HPPPipelineLayout
 {
   public:
-	HPPPipelineLayout(vkb::core::HPPDevice &device, const std::vector<vkb::core::HPPShaderModule *> &shader_modules);
+	HPPPipelineLayout(vkb::core::DeviceCpp &device, const std::vector<vkb::core::HPPShaderModule *> &shader_modules);
 	HPPPipelineLayout(const HPPPipelineLayout &) = delete;
 	HPPPipelineLayout(HPPPipelineLayout &&other);
 	~HPPPipelineLayout();
@@ -53,7 +52,7 @@ class HPPPipelineLayout
 	bool                                                                           has_descriptor_set_layout(const uint32_t set_index) const;
 
   private:
-	vkb::core::HPPDevice                                                   &device;
+	vkb::core::DeviceCpp                                                   &device;
 	vk::PipelineLayout                                                      handle;
 	std::vector<vkb::core::HPPShaderModule *>                               shader_modules;                // The shader modules that this pipeline layout uses
 	std::unordered_map<std::string, vkb::core::HPPShaderResource>           shader_resources;              // The shader resources that this pipeline layout uses, indexed by their name
